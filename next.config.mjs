@@ -1,5 +1,10 @@
 import nextra from 'nextra'
 
-export default nextra({
-  latex: false
+const withNextra = nextra({
+  latex: false,
+  defaultShowCopyCode: true
+})
+
+export default withNextra({
+  // Standard Next.js options can go here
 })
