@@ -207,6 +207,112 @@ export default config({
                 }),
               },
             }),
+
+            CardGroup: component({
+              label: '🃏 Card Group',
+              preview: (props) => (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: 12, borderRadius: 8 }}>
+                  <strong>🃏 Card Group</strong>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                    {props.fields.cols.value || 2} columns · {props.fields.cards.elements.length} card(s)
+                  </div>
+                </div>
+              ),
+              schema: {
+                cols: fields.integer({
+                  label: 'Columns',
+                  defaultValue: 2,
+                  validation: { isRequired: false, min: 1, max: 4 },
+                }),
+                cards: fields.array(
+                  fields.object({
+                    icon: fields.text({
+                      label: 'Icon (emoji)',
+                      validation: { isRequired: false },
+                    }),
+                    title: fields.text({
+                      label: 'Title',
+                      validation: { isRequired: true },
+                    }),
+                    description: fields.text({
+                      label: 'Description',
+                      multiline: true,
+                      validation: { isRequired: false },
+                    }),
+                    href: fields.url({
+                      label: 'Link URL',
+                      validation: { isRequired: false },
+                    }),
+                  }),
+                  {
+                    label: 'Cards',
+                    itemLabel: (props) => props.fields.title.value || 'Card',
+                  }
+                ),
+              },
+            }),
+
+            Steps: component({
+              label: '📋 Steps',
+              preview: (props) => (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: 12, borderRadius: 8 }}>
+                  <strong>📋 Steps</strong>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                    {props.fields.steps.elements.length} step(s)
+                  </div>
+                </div>
+              ),
+              schema: {
+                steps: fields.array(
+                  fields.object({
+                    title: fields.text({
+                      label: 'Step Title',
+                      validation: { isRequired: true },
+                    }),
+                    body: fields.text({
+                      label: 'Step Description',
+                      multiline: true,
+                      validation: { isRequired: true },
+                    }),
+                  }),
+                  {
+                    label: 'Steps',
+                    itemLabel: (props) => props.fields.title.value || 'Step',
+                  }
+                ),
+              },
+            }),
+
+            RawHTML: component({
+              label: '🖥 Raw HTML',
+              preview: (props) => (
+                <div style={{ background: '#fdf4ff', border: '1px dashed #d946ef', padding: 12, borderRadius: 8 }}>
+                  <strong>🖥 Raw HTML</strong>
+                  {props.fields.iframe.value && (
+                    <span style={{ marginLeft: 8, fontSize: 12, color: '#a21caf' }}>(sandboxed iframe)</span>
+                  )}
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, fontFamily: 'monospace', maxHeight: 60, overflow: 'hidden' }}>
+                    {props.fields.html.value?.slice(0, 120) || '(no HTML)'}
+                  </div>
+                </div>
+              ),
+              schema: {
+                html: fields.text({
+                  label: 'HTML Content',
+                  multiline: true,
+                  validation: { isRequired: true },
+                }),
+                height: fields.integer({
+                  label: 'Height (px, for iframe mode)',
+                  defaultValue: 400,
+                  validation: { isRequired: false },
+                }),
+                iframe: fields.checkbox({
+                  label: 'Render in sandboxed iframe (safer for third-party HTML)',
+                  defaultValue: false,
+                }),
+              },
+            }),
           },
         }),
       },
