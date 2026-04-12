@@ -1,28 +1,60 @@
 import { Layout, Navbar } from 'nextra-theme-docs'
-import { getPageMap } from 'nextra/page-map'
 import 'nextra-theme-docs/style.css'
 import type { ReactNode } from 'react'
+import { getNavTree, navTreeToPageMap } from '../lib/page-map'
 
 export const metadata = {
   title: 'InsightProfit Knowledge Base',
-  description: 'Complete knowledge base for Insight Profit products and workflows'
+  description: 'Complete knowledge base for Insight Profit products and workflows',
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const pageMap = await getPageMap()
+  // Build sidebar from Keystatic content (falls back to empty if content dir missing)
+  let pageMap: any[] = []
+  try {
+    const tree = await getNavTree()
+    pageMap = navTreeToPageMap(tree)
+  } catch {
+    // Content directory not yet populated — show empty sidebar
+    pageMap = []
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         <Layout
           navbar={
-            <Navbar logo={<span style={{ fontWeight: 'bold' }}>InsightProfit KB</span>} />
+            <Navbar
+              logo={
+                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                  InsightProfit KB
+                </span>
+              }
+            />
           }
           pageMap={pageMap}
           docsRepositoryBase="https://github.com/rtmendes/knowledge-base-nextra"
+          editLink={null}
           footer={
-            <p style={{ textAlign: 'center', padding: '1rem' }}>
-              © 2026 Insight Profit. All rights reserved.
-            </p>
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '1rem',
+                borderTop: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '1.5rem',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span>© 2026 Insight Profit. All rights reserved.</span>
+              <a
+                href="/keystatic"
+                style={{ color: '#6b7280', textDecoration: 'none', fontSize: '0.875rem' }}
+              >
+                ✏️ Admin Editor
+              </a>
+            </div>
           }
         >
           {children}

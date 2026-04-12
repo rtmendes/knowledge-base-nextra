@@ -1,0 +1,113 @@
+---
+title: The Complete Guide to AI Prompting
+description: Deep-dive into AI prompting methodology — advanced techniques, chaining, personas, and production-ready prompt patterns for InsightProfit workflows.
+status: active
+category: AI Tools
+order: 3
+tags:
+  - AI prompting
+  - automation
+  - guides
+  - artificial intelligence
+  - advanced
+---
+
+# The Complete Guide to AI Prompting
+
+This guide offers comprehensive insights into effectively prompting AI systems for optimal responses. Learn the principles and techniques behind crafting prompts that work in production.
+
+## Why Prompting Matters
+
+AI models are sensitive to how questions are framed. The same underlying request, phrased differently, can produce outputs that vary dramatically in quality, format, and usefulness. Mastering prompting is the highest-leverage skill for anyone using AI in their workflows.
+
+## Foundation: The RCTF Framework
+
+Every effective prompt has four components:
+
+**Role** — Who the AI should be. "You are a senior copywriter who specialises in B2B SaaS." This primes tone, vocabulary, and domain knowledge.
+
+**Context** — What situation you're in. Include relevant facts, previous decisions, constraints, and the end audience.
+
+**Task** — What specifically you want. Use action verbs: write, summarise, reformat, analyse, compare, extract.
+
+**Format** — What the output should look like. Specify structure, length, and medium.
+
+## Advanced Techniques
+
+### Chain-of-Thought Prompting
+
+For complex reasoning tasks, ask the AI to think step by step:
+
+```
+Analyse the market for [product]. Think step by step:
+1. Identify the primary customer segments
+2. List the top 3 competitors for each
+3. Identify gaps our product could fill
+4. Recommend positioning
+```
+
+### Few-Shot Examples
+
+Provide 2–3 examples of the input/output format you want before asking for the real task. This "shows" the AI rather than just "tells" it.
+
+### Persona Stacking
+
+Combine multiple roles for specialised outputs:
+
+```
+You are both a UX researcher and a conversion copywriter. 
+Review this landing page and give feedback from both perspectives.
+```
+
+### Negative Constraints
+
+Be explicit about what NOT to do:
+
+```
+Write a product description. Do NOT use the words "revolutionary", 
+"game-changing", or "next-level". Avoid passive voice.
+```
+
+## Prompting for InsightProfit Projects
+
+### Genspark Workflows
+
+When importing Genspark content, use structured extraction prompts:
+
+```
+Extract the following from this article and output as JSON:
+- title (string)
+- summary (2 sentences, string)
+- key_points (array of strings, max 5)
+- suggested_slug (url-safe string)
+- tags (array of strings, max 6)
+```
+
+### PopeBot Commands
+
+PopeBot accepts natural language. For best results:
+- Be specific about which project or doc you mean
+- Include the desired output format if you want structured data
+- Use "in the style of [example]" to get tone matching
+
+### Manus Agents
+
+For Manus agent tasks, structure prompts as:
+1. Define the agent's goal
+2. Specify the tools/sources it can use
+3. Define success criteria
+4. Set output format
+
+## Troubleshooting Bad Outputs
+
+| Problem | Fix |
+| --- | --- |
+| Too generic | Add more context and constraints |
+| Wrong format | Explicitly describe the output format or give an example |
+| Hallucinating facts | Add "only use information I provide" or "cite sources" |
+| Too long | Specify word/character count |
+| Off-topic | Break into smaller, focused prompts |
+
+## Building a Prompt Library
+
+For recurring tasks, save proven prompts in this KB under each project's documentation. Tag them with `prompt-template` so agents can discover and reuse them.
