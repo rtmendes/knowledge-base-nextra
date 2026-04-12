@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
  * GET /api/import-doc — redirect to the import UI page
  */
 export async function GET() {
-  return NextResponse.redirect(new URL('/import', process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'))
+  const base = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000'
+  return NextResponse.redirect(new URL('/import', base))
 }
 
 /**
@@ -21,92 +24,102 @@ export async function POST(req: NextRequest) {
     let rawContent: string
     let sourceSlug: string
 
-    // ── Fetch from URL if provided ────────────────────────────────────────────
+    // ── Fetch from URL if provided ─────────────────────────────────────────
     if (body.url) {
       const res = await fetch(body.url)
       if (!res.ok) {
-        return NextResponse.json({ error: `Failed to fetch URL: ${res.statusText}` }, { status: 400 })
+        return NextResponse.json(
+          { error: `Failed to fetch URL: ${res.statusText}` },
+          { status: 400 },
+        )
       }
       rawContent = await res.text()
-      sourceSlug = body.url.split('/').pop()?.replace(/\.(md|mdx|txt)$/i, '') || 'imported-doc'
+      sourceSlug =
+        body.url.split('/').pop()?.replace(/\.(md|mdx|txt)$/i, '') ||
+        'imported-doc'
     } else if (body.content) {
       rawContent = body.content
-      sourceSlug = body.slug || (body.filename?.replace(/\.(md|mdx|txt)$/i, '') ?? 'imported-doc')
+      sourceSlug =
+        body.slug ||
+        (body.filename?.replace(/\.(md|mdx|txt)$/i, '') ?? 'imported-doc')
     } else {
-      return NextResponse.json({ error: 'Provide either content or url' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Provide either content or url' },
+        { status: 400 },
+      )
     }
 
-    // ── Parse frontmatter ─────────────────────────────────────────────────────
-    const { title, description, slug, body: docBody } = parseFrontmatter(rawContent, sourceSlug)
+    // ── Parse frontmatter ──────────────────────────────────────────────────
+    const { title, description, slug, body: docBody } = parseFrontmatter(
+      rawContent,
+      sourceSlug,
+    )
 
-    // ── Build a minimal .mdoc file ────────────────────────────────────────────
-    // Keystatic .mdoc format = YAML frontmatter + markdown body
+    // ── Build a minimal .mdoc file ─────────────────────────────────────────
     const mdocContent = buildMdoc({ title, description, slug, body: docBody })
 
-    // ── Push to GitHub ────────────────────────────────────────────────────────
-    const token = process.env.KEYSTATIC_GITHUB_CLIENT_SECRET
-      ? undefined // don't use client secret as API token
-      : process.env.GITHUB_TOKEN
-
-    const githubToken = process.env.GITHUB_TOKEN || process.env.KEYSTATIC_GITHUB_CLIENT_ID
+    // ── Push to GitHub ─────────────────────────────────────────────────────
+    const githubToken = process.env.GITHUB_TOKEN
 
     if (!githubToken) {
-      // In local mode — just return the content for manual copy
+      // No token set — return content so the user can copy it manually
       return NextResponse.json({
         title,
         slug,
         description,
         mdoc: mdocContent,
-        info: 'No GITHUB_TOKEN set — content generated but not pushed. Copy the mdoc field manually.',
+        info: 'No GITHUB_TOKEN set — copy the mdoc field and add it manually via the Keystatic editor.',
       })
     }
 
     const filePath = `content/docs/${slug}.mdoc`
     const owner = 'rtmendes'
     const repo = 'knowledge-base-nextra'
+    const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`
+    const headers = {
+      Authorization: `token ${githubToken}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    }
 
-    // Check if file exists (to get SHA for update)
+    // Check for existing file SHA (needed for updates)
     let existingSha: string | undefined
     try {
-      const checkRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`,
-        { headers: { Authorization: `token ${githubToken}`, Accept: 'application/vnd.github.v3+json' } }
-      )
+      const checkRes = await fetch(apiBase, { headers })
       if (checkRes.ok) {
         const existing = await checkRes.json()
         existingSha = existing.sha
       }
     } catch {}
 
-    const pushRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `token ${githubToken}`,
-          Accept: 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: `kb: Import "${title}"`,
-          content: Buffer.from(mdocContent).toString('base64'),
-          ...(existingSha ? { sha: existingSha } : {}),
-        }),
-      }
-    )
+    const pushRes = await fetch(apiBase, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message: `kb: Import "${title}"`,
+        content: Buffer.from(mdocContent).toString('base64'),
+        ...(existingSha ? { sha: existingSha } : {}),
+      }),
+    })
 
     if (!pushRes.ok) {
       const err = await pushRes.json()
-      return NextResponse.json({ error: err.message || 'GitHub push failed' }, { status: 500 })
+      return NextResponse.json(
+        { error: err.message || 'GitHub push failed' },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({ title, slug, description, success: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Unknown error' }, { status: 500 })
+    return NextResponse.json(
+      { error: err?.message || 'Unknown error' },
+      { status: 500 },
+    )
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function parseFrontmatter(raw: string, fallbackSlug: string) {
   let title = ''
@@ -114,8 +127,8 @@ function parseFrontmatter(raw: string, fallbackSlug: string) {
   let slug = fallbackSlug
   let body = raw
 
-  // Extract YAML frontmatter if present
-  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/)
+  // Extract YAML frontmatter block if present
+  const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)/)
   if (fmMatch) {
     const yaml = fmMatch[1]
     body = fmMatch[2]
@@ -139,9 +152,13 @@ function parseFrontmatter(raw: string, fallbackSlug: string) {
     }
   }
 
-  if (!title) title = slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  if (!title) {
+    title = slug
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  }
 
-  // Clean slug
+  // Sanitise slug
   slug = slug
     .toLowerCase()
     .replace(/[^a-z0-9-/]/g, '-')
@@ -151,17 +168,25 @@ function parseFrontmatter(raw: string, fallbackSlug: string) {
   return { title, description, slug, body }
 }
 
-function buildMdoc({ title, description, slug, body }: { title: string; description: string; slug: string; body: string }) {
-  return [
+function buildMdoc({
+  title,
+  description,
+  slug,
+  body,
+}: {
+  title: string
+  description: string
+  slug: string
+  body: string
+}) {
+  const frontmatter = [
     '---',
     `title: "${title.replace(/"/g, '\\"')}"`,
-    description ? `description: "${description.replace(/"/g, '\\"')}"` : '',
+    ...(description ? [`description: "${description.replace(/"/g, '\\"')}"`] : []),
     `slug: "${slug}"`,
     'status: active',
     '---',
-    '',
-    body.trim(),
-  ]
-    .filter((line) => line !== '')
-    .join('\n')
+  ].join('\n')
+
+  return `${frontmatter}\n\n${body.trim()}\n`
 }
