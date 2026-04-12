@@ -10,15 +10,21 @@ export const metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Build sidebar from Keystatic content (falls back to empty if content dir missing)
-  let pageMap: any[] = []
+  // IMPORTANT: Nextra v4's normalizePages does "data" in list[0] without
+  // guarding against empty arrays. pageMap must NEVER be [].
+  const FALLBACK_PAGE_MAP = [
+    { kind: 'MdxPage' as const, name: 'index', route: '/', frontMatter: { title: 'Home' } },
+  ]
+  let pageMap: any[] = FALLBACK_PAGE_MAP
   try {
     const tree = await getNavTree()
-    pageMap = navTreeToPageMap(tree)
+    const mapped = navTreeToPageMap(tree)
+    // Only use mapped result if non-empty; otherwise keep the fallback
+    if (mapped.length > 0) {
+      pageMap = mapped
+    }
   } catch {
-    // Content directory not yet populated — provide minimal valid pageMap
-    // IMPORTANT: Nextra v4's normalizePages does "data" in list[0] without
-    // guarding against empty arrays, throwing TypeError when pageMap = [].
-    pageMap = [{ kind: 'MdxPage' as const, name: 'index', route: '/', frontMatter: { title: 'Home' } }]
+    // Content directory not yet populated — fallback already set above
   }
 
   return (
