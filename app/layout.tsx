@@ -15,8 +15,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     const tree = await getNavTree()
     pageMap = navTreeToPageMap(tree)
   } catch {
-    // Content directory not yet populated — show empty sidebar
-    pageMap = []
+    // Content directory not yet populated — provide minimal valid pageMap
+    // IMPORTANT: Nextra v4's normalizePages does "data" in list[0] without
+    // guarding against empty arrays, throwing TypeError when pageMap = [].
+    pageMap = [{ kind: 'MdxPage' as const, name: 'index', route: '/', frontMatter: { title: 'Home' } }]
   }
 
   return (
