@@ -1,13 +1,18 @@
-import nextra from 'nextra'
+import nextra from "nextra";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const withNextra = nextra({
   latex: false,
-  defaultShowCopyCode: true
-})
+  defaultShowCopyCode: true,
+});
 
-export default withNextra({
+const nextConfig = withNextra({
   typescript: {
-    // Layout uses nextra/page-map which doesn't ship .d.ts — ignore during build
-    ignoreBuildErrors: true
-  }
-})
+    ignoreBuildErrors: true,
+  },
+});
+
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  sourcemaps: { disable: true },
+});
