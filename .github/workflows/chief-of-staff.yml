@@ -1,0 +1,91 @@
+name: Chief of Staff - Daily Briefing
+
+# ────────────────────────────────────────────────────────────────────────────
+# Chief of Staff Agent
+# AGENT_ID: chief_of_staff_agent
+# ROLE: Chief of Staff - Operations Orchestrator
+# Notion spec:  https://www.notion.so/308f57485e07804fb1dcd54136e6d14f
+# Genspark hub: https://www.genspark.ai/hub?id=915cf785-f050-4dcc-99c3-1a9130bcbd8b
+#
+# WHAT IT DOES (daily @ 7am EST):
+#   1. Pulls all active ClickUp tasks across 4 lists
+#   2. Checks GitHub Actions workflow statuses
+#   3. Reviews Vercel deployment health
+#   4. Queries Neon DB project data
+#   5. Synthesizes 1-page briefing via Groq llama-3.3-70b
+#   6. Posts briefing to Notion daily log page
+#   7. Creates ClickUp tasks for blockers / paused projects
+#   Monday only: full cross-project weekly plan
+#
+# REQUIRED SECRETS (Settings > Secrets > Actions):
+#   GROQ_API_KEY              - Groq LLM API key
+#   CLICKUP_API_TOKEN         - ClickUp personal API token
+#   NOTION_API_TOKEN          - Notion integration token
+#   NOTION_DAILY_LOG_PAGE_ID  - ID of the Notion page to post briefings under
+#   VERCEL_TOKEN              - Vercel API token (optional)
+#   NEON_API_KEY              - Neon DB API key (optional)
+# ────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # 7:00 AM EST = 12:00 UTC  (change to 11:00 UTC during EDT / daylight saving)
+    - cron: '0 12 * * *'
+
+  workflow_dispatch:
+    inputs:
+      briefing_type:
+        description: 'Override briefing type (auto = detect from day of week)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - daily
+          - weekly
+
+jobs:
+  chief-of-staff:
+    name: Generate ${{ github.event.inputs.briefing_type || 'auto' }} Briefing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install --quiet requests
+
+      - name: Run Chief of Staff Agent
+        env:
+          GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
+          CLICKUP_API_TOKEN:        ${{ secrets.CLICKUP_API_TOKEN }}
+          NOTION_API_TOKEN:         ${{ secrets.NOTION_API_TOKEN }}
+          NOTION_DAILY_LOG_PAGE_ID: ${{ secrets.NOTION_DAILY_LOG_PAGE_ID }}
+          VERCEL_TOKEN:             ${{ secrets.VERCEL_TOKEN }}
+          NEON_API_KEY:             ${{ secrets.NEON_API_KEY }}
+          GITHUB_TOKEN:             ${{ secrets.GITHUB_TOKEN }}
+          BRIEFING_TYPE:            ${{ github.event.inputs.briefing_type || 'auto' }}
+        run: python .github/scripts/chief_of_staff.py
+
+      # If the agent itself fails, create a blocker task in ClickUp
+      - name: Create failure task in ClickUp on error
+        if: failure()
+        env:
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+        run: |
+          curl -sf -X POST \
+            "https://api.clickup.com/api/v2/list/901712867639/task" \
+            -H "Authorization: $CLICKUP_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"BLOCKER: Chief of Staff Agent FAILED $(date +%Y-%m-%d)\",
+              \"description\": \"Workflow failed. Logs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\",
+              \"priority\": 1
+            }" && echo "Failure task created in Blocked list" || echo "Could not create failure task"
