@@ -1,0 +1,35 @@
+name: Daily Morning Briefing
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 7am EST (UTC-5) = 12:00 UTC
+  workflow_dispatch:        # allow manual trigger any time
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install dependencies
+        run: cd scripts && npm ci
+
+      - name: Run daily briefing
+        run: node scripts/daily-briefing.js
+        env:
+          CLICKUP_API_KEY: ${{ secrets.CLICKUP_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          CLICKUP_WORKSPACE_ID: '14233858'
+          NOTION_DAILY_LOG_PARENT_ID: ${{ secrets.NOTION_DAILY_LOG_PARENT_ID }}
+          CLICKUP_BRIEFING_TASK_ID: ${{ secrets.CLICKUP_BRIEFING_TASK_ID }}
