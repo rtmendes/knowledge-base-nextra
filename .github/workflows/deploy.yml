@@ -1,21 +1,33 @@
 name: Deploy to Vercel
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
       - name: Deploy to Vercel
-        run: vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --scope=team_RDc9rfG2nyUydjZvco8L06C9
+        run: npx vercel --prod --yes
         env:
-          VERCEL_ORG_ID: team_RDc9rfG2nyUydjZvco8L06C9
-          VERCEL_PROJECT_ID: prj_kmVj9XsYQykbBzXCrMnMDNWvmvI1
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
