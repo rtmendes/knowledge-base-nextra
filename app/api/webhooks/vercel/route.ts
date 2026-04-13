@@ -2,21 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // ============================================================
 // Vercel → ClickUp Auto-Triage Webhook
-// Receives deployment.error events, diagnoses with Groq,
-// creates a ClickUp task in the Blocked list automatically.
+// Endpoint: POST /api/webhooks/vercel
+//
+// Receives deployment.error events from Vercel, diagnoses
+// the root cause with Groq (llama-3.1-8b-instant), then
+// auto-creates a ClickUp task in the Blocked list.
+// Logs every run to command_center.agent_runs in Neon.
+//
+// Self-healing: if Groq fails, ClickUp task is still created
+// with "could not diagnose automatically" in the description.
 // ============================================================
 
-const CLICKUP_API_KEY = process.env.CLICKUP_API_KEY!;
-const GROQ_API_KEY =
-  process.env.GROQ_API_KEY ?? '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';
-const DATABASE_URL =
-  process.env.DATABASE_URL ??
-  'postgresql://neondb_owner:npg_b6laEvxfrUn5@ep-sweet-mountain-andfhxyb-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const CLICKUP_API_KEY   = process.env.CLICKUP_API_KEY!;
+const GROQ_API_KEY      = process.env.GROQ_API_KEY
+  ?? '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';
+const DATABASE_URL      = process.env.DATABASE_URL
+  ?? 'postgresql://neondb_owner:npg_b6laEvxfrUn5@ep-sweet-mountain-andfhxyb-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
-const CLICKUP_BLOCKED_LIST_ID = '901712867639';
+// ClickUp list IDs
+const BLOCKED_LIST_ID         = '901712867639';
+// const ACTIVE_BUILD_LIST_ID = '901712867634';  // for future use
+// const REVENUE_CRITICAL_LIST_ID = '901712867629'; // for future use
+
 const REVENUE_CRITICAL_PROJECTS = ['polsia', 'command-center', 'command_center'];
 
-// ── Groq diagnosis ────────────────────────────────────────────
+// ── Groq AI Diagnosis ─────────────────────────────────────────
 async function diagnoseWithGroq(errorContext: string): Promise<string> {
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -31,7 +41,8 @@ async function diagnoseWithGroq(errorContext: string): Promise<string> {
           {
             role: 'system',
             content:
-              'You are a CI/CD build error expert. Given a Vercel deployment failure, provide exactly 1-2 sentences: the root cause and the most likely fix. Be specific and technical.',
+              'You are a CI/CD expert. Given a Vercel deployment failure, respond with exactly ' +
+              '1-2 sentences: the root cause and the most likely fix. Be specific and technical.',
           },
           {
             role: 'user',
@@ -42,18 +53,22 @@ async function diagnoseWithGroq(errorContext: string): Promise<string> {
         temperature: 0.1,
       }),
     });
+
     if (!res.ok) throw new Error(`Groq HTTP ${res.status}`);
     const data = (await res.json()) as {
       choices: Array<{ message: { content: string } }>;
     };
-    return data.choices[0]?.message?.content?.trim() ?? 'Could not diagnose automatically.';
+    return (
+      data.choices[0]?.message?.content?.trim() ??
+      'Could not diagnose automatically.'
+    );
   } catch (err) {
     console.error('[vercel-webhook] Groq diagnosis failed:', err);
     return 'Could not diagnose automatically — Groq API unavailable.';
   }
 }
 
-// ── ClickUp task creation ─────────────────────────────────────
+// ── ClickUp Task Creation ─────────────────────────────────────
 async function createClickUpTask(opts: {
   projectName: string;
   diagnosis: string;
@@ -62,6 +77,7 @@ async function createClickUpTask(opts: {
 }): Promise<string | null> {
   try {
     const { projectName, diagnosis, errorSummary, deploymentLink } = opts;
+
     const isRevenueCritical = REVENUE_CRITICAL_PROJECTS.some((p) =>
       projectName.toLowerCase().includes(p)
     );
@@ -70,10 +86,10 @@ async function createClickUpTask(opts: {
       `## 🤖 AI Diagnosis\n${diagnosis}\n\n` +
       `## Build Context\n\`\`\`\n${errorSummary.slice(0, 2000)}\n\`\`\`\n\n` +
       `## Links\n- [View Failed Deployment on Vercel](${deploymentLink})\n\n` +
-      `*Auto-triaged at ${new Date().toISOString()} — no human review required*`;
+      `*Auto-triaged at ${new Date().toISOString()} — no manual review required*`;
 
     const res = await fetch(
-      `https://api.clickup.com/api/v2/list/${CLICKUP_BLOCKED_LIST_ID}/task`,
+      `https://api.clickup.com/api/v2/list/${BLOCKED_LIST_ID}/task`,
       {
         method: 'POST',
         headers: {
@@ -86,7 +102,8 @@ async function createClickUpTask(opts: {
           priority: isRevenueCritical ? 1 : 3, // 1=urgent, 3=normal
           tags: ['vercel', 'build-failure', 'auto-triaged'],
           due_date_time: true,
-          due_date: Date.now() + (isRevenueCritical ? 2 * 3_600_000 : 24 * 3_600_000),
+          due_date:
+            Date.now() + (isRevenueCritical ? 2 * 3_600_000 : 24 * 3_600_000),
         }),
       }
     );
@@ -95,6 +112,7 @@ async function createClickUpTask(opts: {
       const text = await res.text();
       throw new Error(`ClickUp ${res.status}: ${text}`);
     }
+
     const task = (await res.json()) as { id: string; url: string };
     console.log(`[vercel-webhook] ClickUp task created: ${task.id} (${task.url})`);
     return task.id;
@@ -104,9 +122,9 @@ async function createClickUpTask(opts: {
   }
 }
 
-// ── Neon DB logging ───────────────────────────────────────────
+// ── Neon DB Logging ───────────────────────────────────────────
 // Requires: npm install pg @types/pg
-// Auto-creates the table if it doesn't exist.
+// Gracefully skipped if pg is not installed (non-fatal).
 async function logToNeon(opts: {
   eventType: string;
   projectName: string;
@@ -116,29 +134,28 @@ async function logToNeon(opts: {
   rawPayload: unknown;
 }): Promise<void> {
   try {
-    // Dynamic import — gracefully skipped if pg is not installed
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pool } = require('pg') as typeof import('pg');
     const pool = new Pool({ connectionString: DATABASE_URL });
 
-    // Ensure table exists (idempotent)
+    // Create table if first run
     await pool.query(`
       CREATE TABLE IF NOT EXISTS command_center.agent_runs (
-        id           BIGSERIAL PRIMARY KEY,
-        event_type   TEXT,
-        project_name TEXT,
-        deployment_id TEXT,
-        diagnosis    TEXT,
+        id              BIGSERIAL PRIMARY KEY,
+        event_type      TEXT,
+        project_name    TEXT,
+        deployment_id   TEXT,
+        diagnosis       TEXT,
         clickup_task_id TEXT,
-        raw_payload  JSONB,
-        created_at   TIMESTAMPTZ DEFAULT NOW()
+        raw_payload     JSONB,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
     await pool.query(
       `INSERT INTO command_center.agent_runs
-         (event_type, project_name, deployment_id, diagnosis, clickup_task_id, raw_payload, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())`,
+         (event_type, project_name, deployment_id, diagnosis, clickup_task_id, raw_payload)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
       [
         opts.eventType,
         opts.projectName,
@@ -148,15 +165,16 @@ async function logToNeon(opts: {
         JSON.stringify(opts.rawPayload),
       ]
     );
+
     await pool.end();
     console.log('[vercel-webhook] Logged to Neon ✓');
   } catch (err) {
-    // Non-fatal — Groq + ClickUp work without DB logging
+    // Non-fatal — Groq + ClickUp work fine without DB logging
     console.warn('[vercel-webhook] Neon logging skipped:', (err as Error).message);
   }
 }
 
-// ── Main POST handler ─────────────────────────────────────────
+// ── Main POST Handler ─────────────────────────────────────────
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: unknown;
   try {
@@ -177,23 +195,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const deployment = ((payload.payload as Record<string, unknown>)?.deployment ??
-    payload.deployment ??
-    {}) as Record<string, unknown>;
-  const project = ((payload.payload as Record<string, unknown>)?.project ??
-    payload.project ??
-    {}) as Record<string, unknown>;
+  const inner      = (payload.payload ?? {}) as Record<string, unknown>;
+  const deployment = (inner.deployment ?? payload.deployment ?? {}) as Record<string, unknown>;
+  const project    = (inner.project    ?? payload.project    ?? {}) as Record<string, unknown>;
 
-  const projectName =
+  const projectName: string =
     (project.name as string) ??
     (deployment.name as string) ??
-    ((deployment.url as string)?.split('.')[0]) ??
+    ((deployment.url as string | undefined)?.split('.')[0]) ??
     'unknown-project';
 
-  const deploymentId = (deployment.id as string) ?? 'unknown';
+  const deploymentId: string = (deployment.id as string) ?? 'unknown';
 
-  const deploymentLink =
-    ((payload.payload as Record<string, unknown>)?.links as Record<string, string>)?.deployment ??
+  const deploymentLink: string =
+    ((inner.links as Record<string, string> | undefined)?.deployment) ??
     `https://vercel.com/deployments/${deploymentId}`;
 
   const meta = (deployment.meta ?? {}) as Record<string, string>;
@@ -207,13 +222,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     `Commit: ${meta.githubCommitMessage ?? meta.gitlabCommitMessage ?? 'unknown'}`,
     `Error code: ${deployment.errorCode ?? 'none'}`,
     `Error message: ${deployment.errorMessage ?? 'none'}`,
-    `Target: ${((payload.payload as Record<string, unknown>)?.target) ?? 'unknown'}`,
+    `Target: ${inner.target ?? 'unknown'}`,
   ].join('\n');
 
-  // Diagnose first (Groq), self-healing fallback if unavailable
+  // 1. Diagnose with Groq (self-healing fallback built-in)
   const diagnosis = await diagnoseWithGroq(errorSummary);
 
-  // Create ClickUp task
+  // 2. Create ClickUp task in Blocked list
   const clickupTaskId = await createClickUpTask({
     projectName,
     diagnosis,
@@ -221,7 +236,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     deploymentLink,
   });
 
-  // Log to Neon — fire-and-forget, non-fatal
+  // 3. Log to Neon — fire-and-forget, never throws
   void logToNeon({
     eventType,
     projectName,
@@ -244,7 +259,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 }
 
-// ── Health check GET ──────────────────────────────────────────
+// ── Health Check GET ──────────────────────────────────────────
 export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
     ok: true,
