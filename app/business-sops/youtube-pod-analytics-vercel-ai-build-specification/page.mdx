@@ -1,0 +1,1219 @@
+---
+title: "YouTube POD Analytics - Vercel AI Build Specification"
+description: "This document outlines the specifications for implementing the YouTube POD Analytics platform, aimed at helping businesses identify product opportunities from YouTube content."
+tags: ["YouTube analytics", "POD business", "build specifications", "AI integration", "data analysis"]
+project: insightprofit
+status: active
+type: resource
+source: genspark
+genspark_url: "https://dlkjtpht.genspark.space/"
+extractedAt: "2026-04-13T00:00:54.023Z"
+contentSize: 29831
+---
+
+Title: YouTube POD Analytics - Vercel AI Build Specification (April 30, 2025)
+
+URL Source: https://dlkjtpht.genspark.space/
+
+Markdown Content:
+# YouTube POD Analytics - Vercel AI Build Specification (April 30, 2025)
+
+# YouTube POD Analytics Platform
+
+Vercel AI Build Specification - April 30, 2025
+
+**Build Instructions for Vercel AI:** This document provides comprehensive specifications for implementing the YouTube POD Analytics platform. Follow these instructions to create a Next.js application with all required features and components.
+
+## Table of Contents
+
+*   [1. Project Overview](https://dlkjtpht.genspark.space/#project-overview)
+*   [2. Technical Architecture](https://dlkjtpht.genspark.space/#technical-architecture)
+*   [3. UI Components & Pages](https://dlkjtpht.genspark.space/#ui-components)
+*   [4. API Integrations](https://dlkjtpht.genspark.space/#api-integrations)
+*   [5. Database Schema](https://dlkjtpht.genspark.space/#database-schema)
+*   [6. AI Agent Implementation](https://dlkjtpht.genspark.space/#ai-agents)
+*   [7. Implementation Steps](https://dlkjtpht.genspark.space/#implementation-steps)
+*   [8. Error Handling](https://dlkjtpht.genspark.space/#error-handling)
+*   [9. Deployment Instructions](https://dlkjtpht.genspark.space/#deployment)
+
+## 1. Project Overview
+
+The YouTube POD Analytics platform is a comprehensive tool for identifying print-on-demand (POD) product opportunities from YouTube comments and validating them against marketplace data. It handles large volumes of data (1,500+ subscribed channels, 200+ playlists) and provides AI-powered analysis.
+
+### 1.1 Core Features
+
+#### YouTube Data Synchronization
+
+Sync channel subscriptions, playlists, videos, and comments with optimized YouTube API quota management.
+
+#### Comment Analysis
+
+Advanced analysis of comments to detect buyer intent and identify POD product opportunities.
+
+#### Analytics Dashboard
+
+Comprehensive dashboard for visualizing channel performance, engagement metrics, and POD opportunities.
+
+#### Marketplace Intelligence
+
+Integration with Amazon, Shopify, eBay, and Google Merchant for market validation of product ideas.
+
+#### Design Generation
+
+AI-powered design generation for POD products based on identified opportunities.
+
+#### AI Agents
+
+Multiple AI agents for buyer intent detection, product validation, and market intelligence.
+
+#### Infinite Canvas Design
+
+Spatial organization of designs with Canva integration and two-way synchronization.
+
+#### Export Capabilities
+
+Export data to CSV, PDF, and Google Sheets with two-way sync support.
+
+### 1.2 Target Users
+
+The platform is designed for print-on-demand business owners who want to identify product opportunities from YouTube content and validate them against marketplace data.
+
+### 1.3 Business Requirements
+
+*   Handle large volume of YouTube data (1,500+ channels, 200+ playlists)
+*   Efficiently manage YouTube API quota limitations
+*   Identify high-probability POD product opportunities
+*   Validate opportunities against marketplace data
+*   Generate product designs and mockups
+*   Provide comprehensive analytics and reporting
+*   Support brand management and organization
+*   Enable cross-platform social media analysis
+
+## 2. Technical Architecture
+
+### 2.1 Technology Stack
+
+| Component | Technology | Purpose |
+| --- | --- | --- |
+| Frontend Framework | Next.js 14+ (App Router) | Core application framework with server components |
+| CSS Framework | Tailwind CSS | Styling and component design |
+| State Management | React Context + Zustand | Application state management |
+| Database | Supabase (PostgreSQL) | Data storage and retrieval |
+| Authentication | Next-Auth with Supabase provider | User authentication and authorization |
+| API Integration | RESTful APIs, GraphQL (where available) | External data integration |
+| Deployment | Vercel | Hosting and serverless functions |
+| Data Visualization | Recharts + D3.js | Charts, graphs, and data visualization |
+| AI Integration | OpenAI API, Vercel AI SDK | AI-powered analysis and generation |
+| Web Scraping | Cheerio + Vercel Edge Functions | Marketplace data collection |
+
+### 2.2 System Architecture
+
+#### Architecture Diagram
+
+##### Client Layer
+
+Next.js Application with React Components
+
+↓
+
+##### API Layer
+
+Next.js API Routes + Vercel Serverless Functions
+
+↓
+
+##### Database
+
+Supabase PostgreSQL
+
+##### External APIs
+
+YouTube, Marketplaces, AI Services
+
+##### Storage
+
+Supabase Storage
+
+##### Infrastructure Layer
+
+Vercel + Supabase Cloud Infrastructure
+
+### 2.3 Data Flow
+
+1
+
+#### YouTube Data Collection
+
+System connects to YouTube API to fetch channel, playlist, video, and comment data with quota management.
+
+2
+
+#### Data Storage & Processing
+
+Collected data is stored in Supabase database and processed for analysis.
+
+3
+
+#### AI Analysis
+
+AI agents analyze comments for buyer intent and identify potential POD opportunities.
+
+4
+
+#### Marketplace Validation
+
+Identified opportunities are validated against marketplace data from Amazon, Shopify, eBay, etc.
+
+5
+
+#### Design Generation
+
+Validated opportunities are used to generate POD product designs.
+
+6
+
+#### User Presentation
+
+Results are presented to users through the dashboard interface.
+
+### 2.4 Optimization Considerations
+
+#### Performance Optimization
+
+*   Implement data caching for YouTube API responses
+*   Use incremental static regeneration for dashboard pages
+*   Implement virtualized lists for large data sets
+*   Use code splitting and lazy loading for components
+
+#### Data Management
+
+*   Implement scheduled sync with YouTube API
+*   Use incremental sync to minimize API quota usage
+*   Implement efficient storage of video metadata
+*   Use indexing for comment search and analysis
+
+#### Security Considerations
+
+*   Implement secure API key management
+*   Use row-level security in Supabase
+*   Implement CORS protection
+*   Secure environment variables in Vercel
+
+#### Responsive Design
+
+*   Implement responsive layout for all screen sizes
+*   Optimize data visualization for mobile
+*   Use adaptive loading for different devices
+*   Implement touch-friendly interfaces
+
+## 3. UI Components & Pages
+
+### 3.1 Design System
+
+#### Color Palette
+
+Primary: #3B82F6
+
+Success: #10B981
+
+Warning: #F59E0B
+
+Danger: #EF4444
+
+Neutral: #6B7280
+
+#### Typography
+
+##### Heading 1
+
+2.25rem (36px), font-weight: 700
+
+##### Heading 2
+
+1.5rem (24px), font-weight: 600
+
+##### Heading 3
+
+1.25rem (20px), font-weight: 500
+
+Body Text
+
+1rem (16px), font-weight: 400
+
+### 3.2 Common Components
+
+#### Navigation Sidebar
+
+##### YouTube POD Analytics
+
+ Dashboard 
+
+ Channels 
+
+ Playlists 
+
+ Videos 
+
+ Comment Analysis 
+
+POD TOOLS
+
+ Brand Management 
+
+ Mockup Generator 
+
+ POD Ideas 
+
+ LLM Assistant 
+
+SYSTEM
+
+ Settings 
+
+#### Stat Cards
+
+Total Channels
+
+1,547
+
+3.2% from last week 
+
+Total Playlists
+
+217
+
+5.1% from last month 
+
+POD Opportunities
+
+342
+
+12.3% from last month 
+
+Active Brands
+
+24
+
+2 new this week 
+
+#### Data Table
+
+| Channel | Subscribers | Videos | POD Value |
+| --- | --- | --- | --- |
+| GameTheory | 15.4M | 421 | High |
+| MKBHD | 17.8M | 183 | Medium |
+
+#### Comment Analysis Card
+
+92
+
+ High Intent 
+
+I would absolutely need this on a shirt right now! That quote is hilarious 😂
+
+Posted 3 days ago
+
+ 243 
+
+ 18 replies 
+
+Gaming Quotes Compilation 2023
+
+4.2M views
+
+View Generate Mockup
+
+### 3.3 Page Structure
+
+#### Dashboard Page
+
+The main dashboard displays an overview of key metrics and recent activity.
+
+# Dashboard
+
+Summary of your YouTube POD insights
+
+Total Channels
+
+1,547
+
+3.2% from last week 
+
+Total Playlists
+
+217
+
+5.1% from last month 
+
+POD Opportunities
+
+342
+
+12.3% from last month 
+
+Active Brands
+
+24
+
+2 new this week 
+
+## Engagement Trends
+
+## Top Performing Categories
+
+Gaming 85%
+
+Humor 75%
+
+Tech 65%
+
+## Recent Activity
+
+[View All](https://dlkjtpht.genspark.space/#)
+
+GameTheory
+
+How Minecraft Changed Gaming
+
+MKBHD
+
+iPhone 15 Pro: One Month Later!
+
+DIY Creators
+
+10 Woodworking Hacks You Need To Try
+
+#### Comment Analysis Page
+
+Dedicated page for analyzing comments with buyer intent detection.
+
+# Advanced Comment Analysis
+
+Buyer Intent Level 
+
+Comment Engagement 
+
+Keyword Filter 
+
+ "need this on a shirt"  "I would buy this"  "Shut up and take my money"  High Intent  + Add filter 
+
+92
+
+ High Intent 
+
+I would absolutely need this on a shirt right now! That quote is hilarious 😂
+
+Posted 3 days ago
+
+ 243 
+
+ 18 replies 
+
+Gaming Quotes Compilation 2023
+
+4.2M views
+
+View Generate Mockup
+
+88
+
+ High Intent 
+
+Shut up and take my money if this was on a hoodie! My gaming buddies would love this
+
+Posted 5 days ago
+
+ 187 
+
+ 24 replies 
+
+Top 10 Gaming Moments
+
+2.1M views
+
+View Generate Mockup
+
+### About Buyer Intent Score
+
+Our AI analyzes comments for signals that indicate purchase intent based on:
+
+*   Explicit purchase language ("I need this", "would buy")
+*   Comment engagement (likes, replies)
+*   Emotional intensity indicators (emojis, exclamation marks)
+*   Social proof phrases ("my friends would love this")
+
+[Learn more about our scoring system](https://dlkjtpht.genspark.space/#)
+
+#### Mockup Generator
+
+Tool for generating POD mockups from identified opportunities.
+
+# POD-Optimized Mockup Generator
+
+ History 
+
+## POD Design Specifications
+
+Product Type 
+
+Print Area 
+
+Target Market 
+
+Style 
+
+Color Scheme 
+
+## Design Prompt
+
+Source Comment 
+
+ I would absolutely need this on a shirt right now! That quote is hilarious 😂 
+
+Design Prompt 
+
+ Generate Optimized Prompt 
+
+Design AI Model 
+
+![Image 1: DALL-E 3](https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/svgs/solid/robot.svg)
+
+Ideogram
+
+![Image 2: DALL-E 3](https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/svgs/solid/robot.svg)
+
+Midjourney
+
+![Image 3: DALL-E 3](https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/svgs/solid/robot.svg)
+
+DALL-E 3
+
+## Mockup Preview
+
+Generate design first
+
+T-Shirt
+
+Hoodie
+
+Mug
+
+ Try variations 
+
+### Sellerpic.ai Integration
+
+Create professional mockups in one click using sellerpic.ai
+
+ Send to Sellerpic 
+
+ Generate Design 
+
+### 3.4 Additional Pages
+
+Implement the following additional pages with consistent design:
+
+#### Channels Page
+
+List of synchronized YouTube channels with metrics, search, filter, and sort capabilities.
+
+#### Playlists Page
+
+Organized view of playlists with video counts, engagement metrics, and POD opportunity indicators.
+
+#### Videos Page
+
+List of videos with playback, transcript view, and comment analysis features.
+
+#### Brand Management
+
+Interface for creating and managing brand profiles with associated design guidelines.
+
+#### POD Ideas
+
+Collection of identified POD opportunities with filtering and organization tools.
+
+#### LLM Assistant
+
+AI chat interface for ideation and assistance with POD product development.
+
+#### Settings Page
+
+Configuration options for API connections, sync scheduling, and platform preferences.
+
+#### Marketplace Intelligence
+
+Dashboard for viewing data from Amazon, Shopify, eBay, and other marketplaces.
+
+## 4. API Integrations
+
+### 4.1 YouTube API Integration
+
+Implement the YouTube Data API v3 integration with quota management to handle large volumes of data.
+
+#### Required Endpoints
+
+GET`/youtube/v3/subscriptions`
+Fetch subscribed channels (1,500+)
+
+GET`/youtube/v3/playlists`
+Fetch user playlists (200+)
+
+GET`/youtube/v3/playlistItems`
+Fetch videos in playlists
+
+GET`/youtube/v3/videos`
+Get video details
+
+GET`/youtube/v3/comments`
+Fetch comments for videos
+
+GET`/youtube/v3/commentThreads`
+Fetch comment threads
+
+#### Quota Management
+
+##### Daily Quota Limit
+
+10,000 units per day (standard)
+
+##### Quota Costs per Operation
+
+*   List subscriptions: 1 unit
+*   List playlists: 1 unit
+*   List playlist items: 1 unit
+*   Get video details: 1 unit
+*   List comments: 1 unit
+
+##### Optimization Strategies
+
+*   Implement incremental sync
+*   Prioritize high-value channels
+*   Cache responses aggressively
+*   Schedule sync during off-peak hours
+
+#### YouTube API Implementation Details
+
+```
+// YouTube API Client Implementation
+
+// Initialize YouTube API client
+const youtubeClient = new YouTubeApiClient({
+  apiKey: process.env.YOUTUBE_API_KEY,
+  quotaManager: new QuotaManager({
+    dailyLimit: 10000,
+    resetTime: '00:00',
+    timeZone: 'America/New_York'
+  })
+});
+
+// Sync Scheduler Implementation
+const syncScheduler = new SyncScheduler({
+  dailySyncTime: '04:00',  // 4am ET
+  timeZone: 'America/New_York',
+  priorityChannels: [...],
+  quotaReserve: 2000  // Keep 2000 units in reserve
+});
+
+// Incremental Sync Implementation
+async function syncChannels() {
+  // Get all subscribed channels with pagination
+  const channels = await youtubeClient.fetchAllSubscribedChannels();
+  
+  // Store in database
+  await db.channels.bulkUpsert(channels);
+  
+  // Return success status
+  return {
+    syncedChannels: channels.length,
+    quotaUsed: youtubeClient.quotaManager.getUsedToday(),
+    quotaRemaining: youtubeClient.quotaManager.getRemainingToday()
+  };
+}
+
+// Comment Analysis Implementation
+async function analyzeComments(videoId) {
+  // Fetch comments for video
+  const comments = await youtubeClient.fetchVideoComments(videoId);
+  
+  // Store comments in database
+  await db.comments.bulkUpsert(comments);
+  
+  // Analyze comments for buyer intent
+  const analyzedComments = await commentAnalyzer.analyzeBuyerIntent(comments);
+  
+  // Update comments with analysis results
+  await db.comments.updateAnalysis(analyzedComments);
+  
+  return analyzedComments;
+}
+```
+
+### 4.2 Marketplace API Integrations
+
+Implement integrations with marketplace APIs to validate and research POD opportunities.
+
+#### Amazon Product API
+
+##### Authentication
+
+Amazon Product Advertising API with AWS Signature v4
+
+##### Key Endpoints
+
+*   GetItems: Retrieve product details
+*   SearchItems: Search for products by keyword
+*   GetBrowseNodes: Get category information
+
+##### Implementation Focus
+
+*   BSR (Best Seller Rank) tracking
+*   Price point analysis
+*   Review sentiment analysis
+*   Category performance metrics
+
+#### Shopify API
+
+##### Authentication
+
+OAuth 2.0 with access tokens
+
+##### Key Endpoints
+
+*   Products: Retrieve product information
+*   Collections: Get product collections
+*   Orders: Analyze order patterns
+
+##### Implementation Focus
+
+*   Top-selling product identification
+*   Price point optimization
+*   Conversion rate analysis
+*   Product category performance
+
+#### eBay API
+
+##### Authentication
+
+OAuth 2.0 with application tokens
+
+##### Key Endpoints
+
+*   Browse API: Search for items
+*   Inventory API: Analyze inventory patterns
+*   Analytics API: Get marketplace insights
+
+##### Implementation Focus
+
+*   Niche opportunity identification
+*   Listing optimization factors
+*   Seasonal trend patterns
+*   Competitive analysis
+
+#### Google Merchant API
+
+##### Authentication
+
+OAuth 2.0 with service accounts
+
+##### Key Endpoints
+
+*   Products API: Manage product data
+*   Datafeeds API: Manage product feeds
+*   Reports API: Get performance metrics
+
+##### Implementation Focus
+
+*   Search trend correlation
+*   Ad performance metrics
+*   Shopping behavior analysis
+*   Seasonal demand patterns
+
+### 4.3 AI Service Integrations
+
+Implement integrations with AI services for analysis, generation, and optimization.
+
+#### OpenAI API
+
+##### Implementation
+
+*   Comment analysis and buyer intent detection
+*   Design prompt generation and optimization
+*   Product description generation
+*   Market research and trend analysis
+
+##### Models
+
+*   GPT-4o for general tasks
+*   GPT-4 Vision for image analysis
+*   Embeddings model for semantic search
+
+#### Grok API
+
+##### Implementation
+
+*   Comment analysis with $150/month credit
+*   Design prompt ideation
+*   Market research assistance
+*   Competitive analysis
+
+##### Integration Points
+
+*   LLM Assistant interface
+*   Batch processing of comments
+*   Automated research workflows
+
+#### Claude API
+
+##### Implementation
+
+*   Detailed market analysis
+*   Design evaluation and feedback
+*   Content generation
+*   Product validation
+
+##### Models
+
+*   Claude 3.5 Sonnet for efficient tasks
+*   Claude 3 Opus for advanced analysis
+
+#### OpenRouter
+
+##### Implementation
+
+*   Model selection interface
+*   Cost optimization across providers
+*   Fallback mechanisms
+*   Access to specialized models
+
+##### Integration Points
+
+*   LLM Assistant for multi-model access
+*   Specialized analysis tasks
+*   Cost-efficient processing
+
+### 4.4 Design & Mockup Integrations
+
+Implement integrations with design and mockup generation services.
+
+#### Canva API
+
+##### Implementation
+
+*   Two-way design synchronization
+*   Template management
+*   Brand kit integration
+*   Design asset management
+
+##### Key Features
+
+*   Import designs from Canva
+*   Export designs to Canva
+*   Sync brand colors and typography
+*   Access Canva templates
+
+#### Sellerpic.ai
+
+##### Implementation
+
+*   Professional mockup generation
+*   Product visualization
+*   Lifestyle mockups
+*   Multi-angle product views
+
+##### Integration Points
+
+*   Send designs to Sellerpic
+*   Import mockups from Sellerpic
+*   Automate mockup generation
+*   Batch process multiple designs
+
+#### Design AI Services
+
+##### Supported Services
+
+*   Ideogram API
+*   Midjourney API (via third-party)
+*   DALL-E (via OpenAI)
+*   Stability AI
+
+##### Implementation
+
+*   Design generation from prompts
+*   Style customization
+*   Design variations
+*   Resolution and format options
+
+#### Google Workspace
+
+##### Implementation
+
+*   Google Sheets integration for data export
+*   Google Drive for asset storage
+*   Google Docs for content creation
+
+##### Key Features
+
+*   Two-way sync with Google Sheets
+*   Export analytics to Sheets
+*   Store designs in Drive
+*   Export reports to Docs
+
+### 4.5 Social Media Integrations
+
+Implement integrations with additional social media platforms for cross-platform analysis.
+
+#### TikTok Data Collection
+
+##### Implementation
+
+*   TikTok API for content analysis
+*   Comment harvesting and analysis
+*   Trending hashtag monitoring
+*   Creator collaboration identification
+
+##### Key Features
+
+*   Buyer intent detection in TikTok comments
+*   Trend correlation with YouTube
+*   Viral potential assessment
+*   Cross-platform opportunity identification
+
+#### Instagram Integration
+
+##### Implementation
+
+*   Instagram Graph API integration
+*   Content and comment analysis
+*   Visual trend identification
+*   Influencer opportunity detection
+
+##### Key Features
+
+*   Comment analysis for buying signals
+*   Shopping tag performance analysis
+*   Visual trend identification
+*   Audience alignment assessment
+
+#### Additional Platforms
+
+##### Supported Platforms
+
+*   Pinterest (trend monitoring)
+*   Reddit (community interest detection)
+*   Twitter (conversation monitoring)
+*   Facebook (group discussion analysis)
+
+##### Implementation
+
+*   API integration where available
+*   Web scraping for public content
+*   Cross-platform trend correlation
+*   Unified analysis framework
+
+#### Web Scraping Infrastructure
+
+##### Implementation
+
+*   Apify-style web scraping capabilities
+*   Browserless solutions for headless browsing
+*   Rotating proxies for data collection
+*   Scheduled scraping jobs
+
+##### Key Features
+
+*   Competitor research automation
+*   Market trend monitoring
+*   Price tracking and analysis
+*   Review sentiment analysis
+
+## 5. Database Schema
+
+### 5.1 Core Tables
+
+| Table | Primary Key | Key Fields | Description |
+| --- | --- | --- | --- |
+| users | id | email, name, avatar_url, created_at | User account information |
+| channels | id | youtube_id, title, description, thumbnail_url, subscriber_count, video_count, last_synced | YouTube channel information |
+| playlists | id | youtube_id, title, description, thumbnail_url, item_count, channel_id, last_synced | YouTube playlist information |
+| videos | id | youtube_id, title, description, thumbnail_url, view_count, like_count, comment_count, duration, published_at, channel_id, transcript, last_synced | YouTube video information |
+| comments | id | youtube_id, text, author, author_channel_id, like_count, reply_count, published_at, video_id, parent_id, intent_score, intent_classification, analyzed_at | YouTube comment information with intent analysis |
+| playlist_videos | id | playlist_id, video_id, position | Junction table linking playlists and videos |
+
+### 5.2 POD-Related Tables
+
+| Table | Primary Key | Key Fields | Description |
+| --- | --- | --- | --- |
+| brands | id | name, description, tone, color_palette, target_audience, user_id, created_at | Brand profile information |
+| pod_opportunities | id | title, description, source_type, source_id, confidence_score, potential_revenue, status, user_id, created_at | Identified POD product opportunities |
+| designs | id | title, description, image_url, prompt, ai_model, pod_opportunity_id, brand_id, user_id, created_at | Generated design information |
+| mockups | id | product_type, image_url, design_id, user_id, created_at | Product mockup information |
+| design_prompts | id | text, category, style, design_id, user_id, created_at | Saved design prompts for reuse |
+| brand_videos | id | brand_id, video_id, notes, user_id, created_at | Videos tagged for specific brands |
+
+### 5.3 Marketplace & Analytics Tables
+
+| Table | Primary Key | Key Fields | Description |
+| --- | --- | --- | --- |
+| marketplace_data | id | platform, category, subcategory, metric_type, metric_value, source_url, collected_at | Marketplace research data |
+| keyword_trends | id | keyword, platform, search_volume, competition, trend_direction, collected_at | Keyword trend information |
+| product_analytics | id | product_type, platform, average_price, sell_through_rate, review_sentiment, collected_at | Product performance analytics |
+| competitor_products | id | title, description, image_url, platform, seller, price, ratings, review_count, url, collected_at | Competitor product information |
+| niche_opportunities | id | niche_name, description, search_volume, competition_level, potential_score, platforms, created_at | Identified niche opportunities |
+
+### 5.4 System & Configuration Tables
+
+| Table | Primary Key | Key Fields | Description |
+| --- | --- | --- | --- |
+| api_credentials | id | service, key_type, key_value, is_active, user_id, created_at | API credentials for external services |
+| sync_logs | id | service, entity_type, entity_count, quota_used, status, started_at, completed_at | Data synchronization logs |
+| user_preferences | id | user_id, preference_key, preference_value, updated_at | User preference settings |
+| saved_searches | id | query, filters, sort_order, user_id, created_at | Saved search queries |
+| scheduled_tasks | id | task_type, schedule, parameters, is_active, last_run, next_run, user_id | Scheduled task configuration |
+
+### 5.5 Relationships Diagram
+
+Database relationship diagram showing connections between all tables.
+
+users
+
+Primary entity
+
+channels
+
+YouTube entity
+
+playlists
+
+YouTube entity
+
+videos
+
+YouTube entity
+
+comments
+
+YouTube entity
+
+playlist_videos
+
+Junction table
+
+brands
+
+POD entity
+
+pod_opportunities
+
+POD entity
+
+designs
+
+POD entity
+
+marketplace_data
+
+Analytics entity
+
+keyword_trends
+
+Analytics entity
+
+api_credentials
+
+System entity
+
+Relationships indicated by color grouping and database foreign keys.
+
+### 5.6 Indexing Strategy
+
+Implement the following indexing strategy for optimal performance with large datasets.
+
+#### Primary Indexes
+
+`channels`: youtube_id, last_synced
+
+`playlists`: youtube_id, channel_id, last_synced
+
+`videos`: youtube_id, channel_id, published_at
+
+`comments`: youtube_id, video_id, intent_score
+
+`pod_opportunities`: source_id, confidence_score
+
+#### Search Optimization
+
+`videos`: Full-text search on title, description
+
+`comments`: Full-text search on text
+
+`pod_opportunities`: Full-text search on title, description
+
+`brands`: Full-text search on name, description
+
+#### Performance Indexes
+
+`comments`: Composite index on (video_id, intent_score) for quick filtering
+
+`videos`: Composite index on (channel_id, view_count) for popularity sorting
+
+`playlists`: Composite index on (user_id, item_count) for large playlist identification
+
+#### Additional Optimizations
+
+Partitioning:Partition large tables (comments, videos) by date ranges
+
+Materialized Views:Create for common analytics queries
+
+Caching:Implement Redis caching for frequent queries
+
+Vector Search:Use pgvector for semantic comment search
+
+## 6. AI Agent Implementation
+
+### 6.1 Buyer Intent Detection Agent
+
+Implement an AI agent to analyze YouTube comments for buyer intent related to print-on-demand products.
+
+#### Agent Functionality
+
+##### Input Processing
+
+*   Raw comment text
+*   Comment metadata (likes, replies)
+*   Video context information
+*   Channel audience demographics
+
+##### Analysis Capabilities
+
+*   Explicit purchase intent phrases ("I need this on a shirt")
+*   Implicit purchase signals ("This would look great on a mug")
+*   Enthusiasm markers (emojis, exclamation points)
+*   Social proof indicators ("My friends would love this")
+
+##### Output Generation
+
+*   Buyer intent score (0-100)
+*   Intent classification (High, Medium, Low)
+*   Key phrases extracted
+*   Product type suggestions
+
+#### Implementation Details
+
+##### AI Models
+
+*   Primary: Custom fine-tuned GPT model
+*   Secondary: Regular expression pattern matching
+*   Tertiary: Engagement-based heuristics
+
+##### Processing Pipeline
+
+*   Text preprocessing and cleaning
+*   Initial pattern-based filtering
+*   Deep analysis of potential matches
+*   Scoring and classification
+
+##### Integration Points
+
+*   Comment sync process for real-time analysis
+*   Batch processing for historical comments
+*   Dashboard for viewing high-intent comments
+*   Notification system for high-value opportunities
+
+#### Implementation Code Sample
+
+```
+// Buyer Intent Detection Agent Implementation
+
+class BuyerIntentDetectionAgent {
+  constructor(options = {}) {
+    this.confidenceThreshold = options.confidenceThreshold || 0.7;
+    this.highIntentThreshold = options.highIntentThreshold || 80;
+    this.mediumIntentThreshold = options.mediumIntentThreshold || 50;
+    this.aiModel = options.aiModel || 'gpt-4o'; // Default model
+    
+    // Common buyer intent phrases for quick filtering
+    this.buyerIntentPhrases = [
+      'need this on a shirt',
+      'would buy this',
+      'shut up and take my money',
+      'where can i get this',
+      'i would wear this',
+      'put this on a',
+      'make this a'
+    ];
+    
+    this.productTypes = [
+      'tshirt', 'shirt', 'hoodie', 'mug', 'poster', 'sticker', 'print'
+    ];
+  }
+  
+  async analyzeComment(comment, videoContext = {}) {
+    // Quick pre-filtering with regex patterns
+    const quickMatch = this.quickIntentCheck(comment.text);
+    
+    if (!quickMatch && comment.likeCount < 10) {
+      // Skip detailed analysis for low-engagement comments with no intent phrases
+      return {
+        intentScore: 0,
+        intentClassification: 'Low',
+        keyPhrases: [],
+        productTypes: [],
+        confidence: 1.0
+      };
+    }
+    
+    // Prepare context for AI analysis
+    const analysisContext = {
+      commentText: comment.text,
+      likeCount: comment.likeCount || 0,
+      replyCount: comment.replyCount || 0,
+      videoTitle: videoContext.title || '',
+      videoCategory: videoContext.category || '',
+      channelName: videoContext.channelName || ''
+    };
+    
+    // Perform AI analysis
+    const aiAnalysis = await this.performAiAnalysis(analysisContext);
+    
+    // Calculate final intent score
+    let intentScore = aiAnalysis.intentScore;
+    
+    // Boost score based on engagement
+    intentScore = this.adjustScoreForEngagement(intentScore, comment);
+    
+    // Determine classification
+    let intentClassification = 'Low';
+    if (intentScore >= this.highIntentThreshold) {
+      intentClassification = 'High';
+    } else if (intentScore >= this.mediumIntentThreshold) {
+      intentClassification = 'Medium';
+    }
+    
+    return {
+      intentScore,
+      intentClassification,
+      keyPhrases: aiAnalysis.keyPhrases,
+      productTypes: aiAnalysis.productTypes,
+      confidence: aiAnalysis.confidence
+    };
+  }
+  
+  quickIntentCheck(text) {
+    const lowerText = text.toLowerCase();
+    
+    // Check for buyer intent phrases
+    for (const phrase of this.buyerIntentPhrases) {
+      if (lowerText.includes(phrase)) {
+        return true;
+      }
+    }
+    
+    // Check for product mentions combined with positive sentiment
+    const hasProductMention = this.productTypes.some(product => lowerText.includes(product));
+    
+        window.__genspark_remove_badge_link = "https://www.genspark.ai/api/html_badge/" +
+            "remove_badge?token=To%2FBnjzloZ3UfQdcSaYfDo9Zm2DC%2B3%2FD97ccVkGeHZRvz1%2FcobqVgQpMYFWJC85yT1m8%2BQHGYpSoBn%2BDbWJhPoLC9fqnNsFjSqJjzDuJGgDP6klknKcwANELThRXO4soQlfAb8RmCbQlXmiGX9fMyi8LP4PFO8zndxTV3pvpSAcxkc7hEsbaLO%2FQnz%2B190vamzsCbF5uvpNBn1Sx656P7%2Fm4GqNsEqwax5r%2BXW0ys7S%2FfiDWK8kjxlXyJEp1nTiK41DP2Oy78yngYMXrRA5BiG0BZ2W1tyOXQ6HMGAEYbAFRsWA%2B9kJkf9lyWWcrjmFamjlTt1c3%2FQwUQZ0ShJxuZYo7y3P7D6lGKzz2zybg5WMEU3ET6ctzOsBxzjVLLyX%2FLoi2dFR1mUsPcDWrw5OX%2BBmEOt9i7akH7Ld8DWfspMdyPIrRXZ8yGo9WybQY%2FpxzC%2F2ZU6je99Qf7F97tv8IOFGwEd82Pi6wIa6AfegAqyfS1rwbdhWqbf8%2FP%2FJDGJPSQeFT9fd6led3hp14KZhKjw%3D%3D";
+        window.__genspark_locale = "en-US";
+        window.__genspark_token = "To/BnjzloZ3UfQdcSaYfDo9Zm2DC+3/D97ccVkGeHZRvz1/cobqVgQpMYFWJC85yT1m8+QHGYpSoBn+DbWJhPoLC9fqnNsFjSqJjzDuJGgDP6klknKcwANELThRXO4soQlfAb8RmCbQlXmiGX9fMyi8LP4PFO8zndxTV3pvpSAcxkc7hEsbaLO/Qnz+190vamzsCbF5uvpNBn1Sx656P7/m4GqNsEqwax5r+XW0ys7S/fiDWK8kjxlXyJEp1nTiK41DP2Oy78yngYMXrRA5BiG0BZ2W1tyOXQ6HMGAEYbAFRsWA+9kJkf9lyWWcrjmFamjlTt1c3/QwUQZ0ShJxuZYo7y3P7D6lGKzz2zybg5WMEU3ET6ctzOsBxzjVLLyX/Loi2dFR1mUsPcDWrw5OX+BmEOt9i7akH7Ld8DWfspMdyPIrRXZ8yGo9WybQY/pxzC/2ZU6je99Qf7F97tv8IOFGwEd82Pi6wIa6AfegAqyfS1rwbdhWqbf8/P/JDGJPSQeFT9fd6led3hp14KZhKjw==";
+```
+
