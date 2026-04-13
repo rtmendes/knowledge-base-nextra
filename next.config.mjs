@@ -1,5 +1,4 @@
 import nextra from "nextra";
-import { withSentryConfig } from "@sentry/nextjs";
 
 const withNextra = nextra({
   latex: false,
@@ -12,7 +11,4 @@ const nextConfig = withNextra({
   },
 });
 
-export default withSentryConfig(nextConfig, {
-  silent: true,
-  sourcemaps: { disable: true },
-});
+export default nextConfig;
