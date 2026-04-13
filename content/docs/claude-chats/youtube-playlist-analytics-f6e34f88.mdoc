@@ -1,0 +1,17 @@
+---
+title: "## Task 1: Fix wiki2.insightprofit.live VPS (Wiki.js is down with 504)"
+description: "Claude Code session — YouTube Playlist Analytics"
+status: "active"
+category: "claude-chats"
+tags:
+  - "claude"
+  - "cowork"
+  - "youtube-playlist-analytics"
+source: claude
+sourceUrl: "claude://projects/YouTube%20Playlist%20Analytics/f6e34f88-ec46-49dd-a2dc-ae8eaf67a50c"
+importedAt: "2026-04-13T23:39:25.507Z"
+sessionDate: "2026-03-18"
+messageCount: 271
+---
+
+[{"type":"heading","level":2,"children":[{"text":"Session Summary"}]},{"type":"paragraph","children":[{"text":"Project: YouTube Playlist Analytics | Date: 2026-03-18 | Messages: 271"}]},{"type":"heading","level":2,"children":[{"text":"Conversation Excerpt"}]},{"type":"heading","level":3,"children":[{"text":"🧑 You"}]},{"type":"paragraph","children":[{"text":"## Task 1: Fix wiki2.insightprofit.live VPS (Wiki.js is down with 504)\nSSH into the VPS and restart Wiki.js. The VPS is hosted on Hostinger.\n```bash\n# 1. SSH into the server (get IP from Hostinger hPanel > VPS > SSH Access)\nssh root@<VPS_IP>\n# 2. Find and restart Wiki.js\ndocker ps -a | grep -i wiki\n# If found:\ndocker restart wiki  # or whatever the container name is\n# If no Docker container found, check systemd:\nsystemctl list-units | grep -i wiki\nsystemctl restart wiki\n# If neither found, check PM2:\npm2 list\npm2 restart wiki\n# 3. If server is out of memory (wiki keeps crashing):\nfree -h\n# If available < 200MB:\nsync && echo 3 > /proc/sys/vm/drop_caches\n# Add swap if none exists:\nfallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile\necho '/swapfile none sw"}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"Let me assess what I can tackle right now across all 4 tasks in parallel."}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"Let me start the Notion database fetch and check for the local Mintlify repo simultaneously, while asking about the VPS credentials."}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"VPS credentials received. Let me try SSH and retry Notion fetch in parallel."}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"The old host key needs clearing first. Let me fix that and retry."}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"VPS skipped. Let me now work on Tasks 2 & 3 in parallel — clone Mintlify repo and retry Notion."}]},{"type":"paragraph","children":[{"text":"... and 265 more messages in this session."}]}]
