@@ -1,0 +1,38 @@
+---
+title: Interactive Tools
+description: Live interactive tools, dashboards, and embedded web apps for InsightProfit operations.
+status: active
+category: Interactive
+order: 20
+tags:
+  - interactive
+  - tools
+  - dashboards
+  - embed
+---
+
+# Interactive Tools
+
+A collection of live, interactive tools and dashboards embedded directly in the knowledge base. Each tool opens in a full-screen frame — no separate browser tab needed.
+
+## Available Tools
+
+| Tool | Description | Route |
+|------|-------------|-------|
+| **Delta Tracker** | Revenue & deal delta tracking dashboard | [/interactive/delta-tracker](/interactive/delta-tracker) |
+| **AI Command Center** | Central hub for AI workflow orchestration | [/interactive/ai-command-center](/interactive/ai-command-center) |
+| **Mission Control** | Live ops mission control dashboard | [/interactive/mission-control](/interactive/mission-control) |
+
+## Hosting Static HTML Tools
+
+Interactive HTML files are served from the `/interactive/` public path. To add a new tool:
+
+1. Drop the `.html` file into `public/interactive/` in the repository
+2. Create a new `.mdoc` page in `content/docs/interactive/` using the `EmbedBlock` component
+3. The tool will appear at `/interactive/<slug>` immediately after deploy
+
+## Notes
+
+- All embeds use `allowFullScreen` and broad `allow` policies so widgets, charts, and clipboard interactions work
+- External tools (like Mission Control on Vercel) are embedded by URL — no file upload needed
+- ClickUp boards require the user to be logged in to ClickUp in their browser

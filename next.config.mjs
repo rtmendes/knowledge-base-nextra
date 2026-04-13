@@ -5,10 +5,60 @@ const withNextra = nextra({
   defaultShowCopyCode: true,
 });
 
-const nextConfig = withNextra({
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-});
 
-export default nextConfig;
+  // Allow iframes and external resources for embedded interactive tools
+  async headers() {
+    return [
+      {
+        // Apply to all routes
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            // CSP: allow iframes from known interactive tool domains
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "font-src 'self' data: https:",
+              "frame-src 'self' https://mission-control-six-zeta.vercel.app https://app.clickup.com https://*.vercel.app https://*.genspark.ai https://*.manus.app",
+              "connect-src 'self' https:",
+              "media-src 'self' blob: data: https:",
+              "worker-src blob:",
+            ].join('; '),
+          },
+        ],
+      },
+      {
+        // Serve interactive HTML files with permissive headers
+        source: '/interactive/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:",
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+    ];
+  },
+};
+
+export default withNextra(nextConfig);
