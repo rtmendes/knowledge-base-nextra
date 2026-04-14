@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "GitHub Actions automation scripts for InsightProfit Command Center",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=20"
   },
