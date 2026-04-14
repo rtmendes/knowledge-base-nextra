@@ -28,8 +28,8 @@ jobs:
         run: node scripts/daily-briefing.js
         env:
           CLICKUP_API_KEY: ${{ secrets.CLICKUP_API_KEY }}
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_TOKEN }}
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           CLICKUP_WORKSPACE_ID: '14233858'
-          NOTION_DAILY_LOG_PARENT_ID: ${{ secrets.NOTION_DAILY_LOG_PARENT_ID }}
+          NOTION_DAILY_LOG_PARENT_ID: ${{ secrets.NOTION_DAILY_LOG_PAGE_ID }}
           CLICKUP_BRIEFING_TASK_ID: ${{ secrets.CLICKUP_BRIEFING_TASK_ID }}
