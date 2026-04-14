@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Command Center — InsightProfit</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a0e1a;
+    --navy-2: #0f1629;
+    --navy-3: #151d35;
+    --navy-4: #1c2540;
+    --purple: #7c3aed;
+    --purple-light: #9d5cf5;
+    --purple-dim: rgba(124,58,237,0.15);
+    --gold: #f59e0b;
+    --gold-dim: rgba(245,158,11,0.15);
+    --green: #10b981;
+    --green-dim: rgba(16,185,129,0.15);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.15);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,0.15);
+    --cyan: #06b6d4;
+    --cyan-dim: rgba(6,182,212,0.15);
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --border: rgba(255,255,255,0.07);
+    --border-2: rgba(255,255,255,0.12);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',sans-serif; background:var(--navy); color:var(--text); min-height:100vh; font-size:13px; }
+  /* TOPBAR */
+  .topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 28px;
+    background:var(--navy-2); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:100;
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-icon {
+    width:34px; height:34px; border-radius:8px;
+    background:linear-gradient(135deg,#0f1629,#7c3aed);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px; border:1px solid var(--purple);
+  }
+  .logo-text { font-size:16px; font-weight:700; }
+  .logo-text span { color:var(--purple-light); }
+  .system-time { font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums; }
+  .btn { padding:7px 16px; border-radius:8px; border:none; cursor:pointer; font-family:'Inter',sans-serif; font-size:12px; font-weight:600; transition:all 0.2s; }
+  .btn-primary { background:var(--purple); color:white; }
+  .btn-primary:hover { background:var(--purple-light); transform:translateY(-1px); }
+  .btn-ghost { background:transparent; color:var(--text-dim); border:1px solid var(--border-2); }
+  .btn-ghost:hover { background:var(--navy-3); color:var(--text); }
+  .topbar-right { display:flex; align-items:center; gap:12px; }
+  /* LAYOUT GRID */
+  .layout { display:grid; grid-template-columns:1fr 340px; gap:0; min-height:calc(100vh - 61px); }
+  .main-panel { padding:24px 28px; border-right:1px solid var(--border); }
+  .side-panel { padding:20px; background:var(--navy-2); overflow-y:auto; }
+  /* SECTION */
+  .section-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+  .section-title .badge { font-size:10px; background:var(--purple-dim); color:var(--purple-light); padding:2px 8px; border-radius:10px; font-weight:600; }
+  /* SEARCH */
+  .search-hero {
+    background:linear-gradient(135deg,var(--navy-3),var(--navy-4));
+    border:1px solid var(--border-2); border-radius:14px;
+    padding:20px; margin-bottom:24px;
+  }
+  .search-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px; }
+  .search-row { display:flex; gap:10px; }
+  .search-box {
+    display:flex; align-items:center; gap:8px;
+    background:var(--navy); border:1px solid var(--border-2);
+    border-radius:9px; padding:10px 16px; flex:1;
+    transition:border-color 0.2s;
+  }
+  .search-box:focus-within { border-color:var(--purple); }
+  .search-box input { background:none; border:none; outline:none; color:var(--text); font-family:'Inter',sans-serif; font-size:13px; width:100%; }
+  .search-box input::placeholder { color:var(--text-muted); }
+  /* STATUS GRID */
+  .status-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+  .status-card {
+    background:var(--navy-2); border:1px solid var(--border);
+    border-radius:12px; padding:16px; position:relative; overflow:hidden;
+    transition:transform 0.2s,border-color 0.2s; cursor:pointer;
+  }
+  .status-card:hover { transform:translateY(-2px); border-color:var(--border-2); }
+  .status-card::after {
+    content:''; position:absolute; bottom:0; left:0; right:0; height:2px;
+  }
+  .status-card.online::after { background:var(--green); }
+  .status-card.warning::after { background:var(--gold); }
+  .status-card.offline::after { background:var(--red); }
+  .sc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .sc-icon { font-size:20px; }
+  .sc-status { display:flex; align-items:center; gap:5px; font-size:10px; font-weight:600; }
+  .sc-status.online { color:var(--green); }
+  .sc-status.warning { color:var(--gold); }
+  .sc-status.offline { color:var(--red); }
+  .sc-dot { width:6px; height:6px; border-radius:50%; }
+  .sc-dot.online { background:var(--green); animation:pulse 2s infinite; }
+  .sc-dot.warning { background:var(--gold); animation:pulse 1.5s infinite; }
+  .sc-dot.offline { background:var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+  .sc-name { font-size:13px; font-weight:700; color:var(--text); margin-bottom:2px; }
+  .sc-desc { font-size:10px; color:var(--text-muted); margin-bottom:10px; }
+  .sc-launch { display:flex; gap:6px; }
+  .launch-btn {
+    padding:5px 10px; border-radius:6px; border:none; cursor:pointer;
+    font-family:'Inter',sans-serif; font-size:10px; font-weight:600;
+    background:var(--navy-4); color:var(--text-dim); transition:all 0.2s;
+  }
+  .launch-btn:hover { background:var(--purple); color:white; }
+  .launch-btn.primary-btn { background:var(--purple-dim); color:var(--purple-light); }
+  .launch-btn.primary-btn:hover { background:var(--purple); color:white; }
+  /* COST TRACKER */
+  .cost-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:24px; }
+  .cost-card { background:var(--navy-2); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .cost-top { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .cost-logo { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
+  .cost-name { font-size:12px; font-weight:600; color:var(--text); }
+  .cost-model { font-size:10px; color:var(--text-muted); }
+  .cost-val { font-size:22px; font-weight:800; color:var(--text); margin-bottom:4px; }
+  .cost-bar-wrap { height:4px; background:var(--navy-4); border-radius:2px; overflow:hidden; margin-bottom:6px; }
+  .cost-bar { height:100%; border-radius:2px; }
+  .cost-limit { font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between; }
+  /* WORKFLOWS */
+  .workflow-list { display:flex; flex-direction:column; gap:8px; }
+  .workflow-item {
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--navy-3); border:1px solid var(--border);
+    border-radius:10px; padding:12px 14px;
+    transition:border-color 0.2s;
+  }
+  .workflow-item:hover { border-color:var(--border-2); }
+  .workflow-left { display:flex; align-items:center; gap:10px; }
+  .wf-icon { font-size:16px; }
+  .wf-name { font-size:12px; font-weight:600; color:var(--text); }
+  .wf-desc { font-size:10px; color:var(--text-muted); }
+  .wf-badge { font-size:9px; padding:2px 7px; border-radius:8px; font-weight:600; }
+  .wf-badge.running { background:var(--green-dim); color:var(--green); }
+  .wf-badge.paused { background:rgba(100,116,139,0.2); color:#94a3b8; }
+  .wf-badge.error { background:var(--red-dim); color:var(--red); }
+  /* TOGGLE */
+  .toggle { position:relative; width:36px; height:20px; cursor:pointer; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    background:var(--navy-4); border:1px solid var(--border-2);
+    border-radius:10px; transition:0.3s;
+  }
+  .toggle-slider::before {
+    content:''; position:absolute; height:14px; width:14px;
+    left:2px; bottom:2px; background:var(--text-muted);
+    border-radius:50%; transition:0.3s;
+  }
+  .toggle input:checked + .toggle-slider { background:var(--purple); border-color:var(--purple); }
+  .toggle input:checked + .toggle-slider::before { transform:translateX(16px); background:white; }
+</style>
+  /* SIDE PANEL STYLES */
+  .side-section { margin-bottom:24px; }
+  .activity-feed { display:flex; flex-direction:column; gap:0; }
+  .activity-item {
+    display:flex; align-items:flex-start; gap:10px;
+    padding:10px 0; border-bottom:1px solid var(--border);
+    position:relative;
+  }
+  .activity-item:last-child { border-bottom:none; }
+  .activity-dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+  .activity-content { flex:1; }
+  .activity-agent { font-size:11px; font-weight:600; color:var(--purple-light); }
+  .activity-action { font-size:11px; color:var(--text-dim); margin-top:1px; }
+  .activity-time { font-size:10px; color:var(--text-muted); margin-top:2px; }
+  .activity-status { font-size:9px; padding:1px 6px; border-radius:6px; font-weight:600; margin-top:3px; display:inline-block; }
+  .activity-status.success { background:var(--green-dim); color:var(--green); }
+  .activity-status.running { background:var(--blue-dim); color:var(--blue); }
+  .activity-status.failed { background:var(--red-dim); color:var(--red); }
+  /* METRICS ROW */
+  .metrics-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:20px; }
+  .metric-mini { background:var(--navy-3); border:1px solid var(--border); border-radius:9px; padding:12px; text-align:center; }
+  .metric-mini-val { font-size:18px; font-weight:800; color:var(--text); }
+  .metric-mini-label { font-size:10px; color:var(--text-muted); margin-top:2px; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div class="logo-text">AI <span>Command Center</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="system-time" id="clock">--:--:-- UTC</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green)">
+      <div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite"></div>
+      All Systems Operational
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-ghost" onclick="runHealthCheck()">🔄 Health Check</button>
+    <button class="btn btn-primary">+ New Workflow</button>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+<div class="main-panel">
+
+  <!-- SYSTEM METRICS -->
+  <div class="metrics-row">
+    <div class="metric-mini"><div class="metric-mini-val">6/6</div><div class="metric-mini-label">Services Online</div></div>
+    <div class="metric-mini"><div class="metric-mini-val" id="wf-running">8</div><div class="metric-mini-label">Active Workflows</div></div>
+    <div class="metric-mini"><div class="metric-mini-val">$48.72</div><div class="metric-mini-label">Today's API Cost</div></div>
+  </div>
+
+  <!-- KB SEARCH -->
+  <div class="search-hero">
+    <div class="search-label">🔍 Knowledge Base Search</div>
+    <div class="search-row">
+      <div class="search-box">
+        <span style="color:var(--text-muted);font-size:14px">⌘</span>
+        <input type="text" placeholder="Search knowledge base, prompts, agents..." id="kb-search" oninput="searchKB(this.value)">
+      </div>
+      <button class="btn btn-primary" onclick="searchKB(document.getElementById('kb-search').value)">Search KB</button>
+    </div>
+    <div id="kb-results" style="margin-top:10px;display:none">
+      <!-- Results rendered by JS -->
+    </div>
+  </div>
+
+  <!-- SERVICE STATUS GRID -->
+  <div class="section-title">🛡️ Live Service Status <span class="badge">6 Active</span></div>
+  <div class="status-grid" id="status-grid">
+    <!-- Rendered by JS -->
+  </div>
+
+  <!-- COST TRACKER -->
+  <div class="section-title" style="margin-bottom:14px">💳 API Cost Tracker <span class="badge">This Month</span></div>
+  <div class="cost-grid">
+    <div class="cost-card">
+      <div class="cost-top">
+        <div class="cost-logo" style="background:#10a37f22;color:#10a37f">GPT</div>
+        <div><div class="cost-name">OpenAI</div><div class="cost-model">GPT-4o / o3</div></div>
+      </div>
+      <div class="cost-val">$142.38</div>
+      <div class="cost-bar-wrap"><div class="cost-bar" style="width:71%;background:linear-gradient(90deg,#10a37f,#34d399)"></div></div>
+      <div class="cost-limit"><span>$0</span><span>Budget: $200</span></div>
+    </div>
+    <div class="cost-card">
+      <div class="cost-top">
+        <div class="cost-logo" style="background:#7c3aed22;color:var(--purple-light)">ANT</div>
+        <div><div class="cost-name">Anthropic</div><div class="cost-model">Claude Sonnet 4</div></div>
+      </div>
+      <div class="cost-val">$89.14</div>
+      <div class="cost-bar-wrap"><div class="cost-bar" style="width:44%;background:linear-gradient(90deg,var(--purple),var(--purple-light))"></div></div>
+      <div class="cost-limit"><span>$0</span><span>Budget: $200</span></div>
+    </div>
+    <div class="cost-card">
+      <div class="cost-top">
+        <div class="cost-logo" style="background:#4285f422;color:#4285f4">GEM</div>
+        <div><div class="cost-name">Google Gemini</div><div class="cost-model">Gemini 2.0 Flash</div></div>
+      </div>
+      <div class="cost-val">$31.60</div>
+      <div class="cost-bar-wrap"><div class="cost-bar" style="width:21%;background:linear-gradient(90deg,#4285f4,#34a853)"></div></div>
+      <div class="cost-limit"><span>$0</span><span>Budget: $150</span></div>
+    </div>
+    <div class="cost-card">
+      <div class="cost-top">
+        <div class="cost-logo" style="background:#f59e0b22;color:var(--gold)">MST</div>
+        <div><div class="cost-name">Mistral AI</div><div class="cost-model">Mistral Large</div></div>
+      </div>
+      <div class="cost-val">$12.05</div>
+      <div class="cost-bar-wrap"><div class="cost-bar" style="width:12%;background:linear-gradient(90deg,var(--gold),#fbbf24)"></div></div>
+      <div class="cost-limit"><span>$0</span><span>Budget: $100</span></div>
+    </div>
+  </div>
+
+  <!-- ACTIVE WORKFLOWS -->
+  <div class="section-title" style="margin-bottom:14px">⚡ Active Workflows</div>
+  <div class="workflow-list" id="workflow-list">
+    <!-- Rendered by JS -->
+  </div>
+
+</div>
+
+<!-- SIDE PANEL -->
+<div class="side-panel">
+
+  <div class="side-section">
+    <div class="section-title">📡 Recent Agent Activity</div>
+    <div class="activity-feed" id="activity-feed">
+      <!-- Rendered by JS -->
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+// CLOCK
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toUTCString().split(' ')[4]+' UTC';
+}
+setInterval(updateClock,1000); updateClock();
+
+// SERVICE DATA
+const SERVICES = [
+  { name:'PopeBot', icon:'🤖', desc:'Primary AI agent orchestrator', status:'online', url:'https://popebot.insightprofit.live', shortUrl:'popebot.insightprofit.live', actions:['Open Dashboard','View Logs'] },
+  { name:'Supabase', icon:'🗄️', desc:'Database & real-time backend', status:'online', url:'https://supabase.com/dashboard', shortUrl:'supabase.com', actions:['Open Studio','Run Query'] },
+  { name:'n8n', icon:'🔗', desc:'Workflow automation engine', status:'online', url:'https://n8n.io', shortUrl:'n8n.insightprofit.live', actions:['Open Editor','View Runs'] },
+  { name:'Vercel', icon:'▲', desc:'Deployment & edge functions', status:'online', url:'https://vercel.com/dashboard', shortUrl:'vercel.com', actions:['Deployments','Analytics'] },
+  { name:'Knowledge Base', icon:'📚', desc:'Nextra knowledge management', status:'online', url:'https://kb.insightprofit.live', shortUrl:'kb.insightprofit.live', actions:['Open KB','Search'] },
+  { name:'GHL', icon:'📣', desc:'GoHighLevel CRM & marketing', status:'online', url:'https://app.gohighlevel.com', shortUrl:'gohighlevel.com', actions:['Open CRM','Campaigns'] },
+];
+
+function renderServices(){
+  const grid = document.getElementById('status-grid');
+  grid.innerHTML = SERVICES.map(s=>`
+    <div class="status-card ${s.status}">
+      <div class="sc-top">
+        <div class="sc-icon">${s.icon}</div>
+        <div class="sc-status ${s.status}">
+          <div class="sc-dot ${s.status}"></div>
+          ${s.status==='online'?'Online':s.status==='warning'?'Degraded':'Offline'}
+        </div>
+      </div>
+      <div class="sc-name">${s.name}</div>
+      <div class="sc-desc">${s.desc}</div>
+      <div class="sc-desc" style="color:var(--purple-light);font-size:9px;margin-bottom:8px">${s.shortUrl}</div>
+      <div class="sc-launch">
+        ${s.actions.map((a,i)=>`<button class="launch-btn ${i===0?'primary-btn':''}" onclick="openService('${s.url}')">${a}</button>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openService(url){ window.open(url,'_blank'); }
+
+// WORKFLOWS
+const WORKFLOWS = [
+  { icon:'🎯', name:'Delta Lead Scorer', desc:'Scores new job opportunities via AI', status:'running', runs:'142 runs today', toggle:true },
+  { icon:'📧', name:'Outreach Automator', desc:'Sends personalized cold emails via GHL', status:'running', runs:'38 sent today', toggle:true },
+  { icon:'🧠', name:'KB Ingestion Pipeline', desc:'Indexes new docs into knowledge base', status:'running', runs:'Last run: 12m ago', toggle:true },
+  { icon:'📊', name:'Weekly Report Builder', desc:'Auto-generates performance reports', status:'paused', runs:'Next: Sunday 9am', toggle:false },
+  { icon:'🔔', name:'Alert Monitor', desc:'Watches for system anomalies', status:'running', runs:'0 alerts active', toggle:true },
+  { icon:'💬', name:'PopeBot Response Queue', desc:'Processes incoming user queries', status:'running', runs:'7 in queue', toggle:true },
+  { icon:'🗂️', name:'CRM Sync (GHL↔Supabase)', desc:'Bidirectional CRM data sync', status:'running', runs:'Last sync: 4m ago', toggle:true },
+  { icon:'⚠️', name:'Error Recovery Agent', desc:'Auto-retries failed workflow steps', status:'error', runs:'2 retries pending', toggle:false },
+];
+
+function renderWorkflows(){
+  const el = document.getElementById('workflow-list');
+  el.innerHTML = WORKFLOWS.map((w,i)=>`
+    <div class="workflow-item">
+      <div class="workflow-left">
+        <div class="wf-icon">${w.icon}</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="wf-name">${w.name}</div>
+            <span class="wf-badge ${w.status}">${w.status}</span>
+          </div>
+          <div class="wf-desc">${w.desc} · ${w.runs}</div>
+        </div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" ${w.toggle?'checked':''} onchange="toggleWorkflow(${i},this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  `).join('');
+  document.getElementById('wf-running').textContent = WORKFLOWS.filter(w=>w.status==='running').length;
+}
+
+function toggleWorkflow(i, on){
+  WORKFLOWS[i].toggle = on;
+  if(!on) WORKFLOWS[i].status = 'paused';
+  else WORKFLOWS[i].status = 'running';
+  renderWorkflows();
+  addActivity('System', `${on?'Started':'Paused'} workflow: ${WORKFLOWS[i].name}`, on?'success':'running');
+}
+
+// ACTIVITY FEED
+const ACTIVITY_SEED = [
+  { agent:'PopeBot', action:'Scored 12 new Delta job opportunities', time:'2m ago', status:'success', color:'#7c3aed' },
+  { agent:'n8n', action:'Triggered email sequence for lead #4821', time:'5m ago', status:'success', color:'#f59e0b' },
+  { agent:'KB Agent', action:'Indexed 3 new documents from Notion sync', time:'12m ago', status:'success', color:'#10b981' },
+  { agent:'GHL Bot', action:'Moved 2 contacts to "Negotiation" stage', time:'18m ago', status:'success', color:'#3b82f6' },
+  { agent:'Supabase', action:'Row-level security audit completed', time:'24m ago', status:'success', color:'#06b6d4' },
+  { agent:'Error Agent', action:'Retrying failed Vercel edge function call', time:'31m ago', status:'running', color:'#ef4444' },
+  { agent:'PopeBot', action:'Generated weekly performance summary', time:'1h ago', status:'success', color:'#7c3aed' },
+  { agent:'n8n', action:'CRM sync: 47 records updated in Supabase', time:'1h 8m ago', status:'success', color:'#f59e0b' },
+  { agent:'Alert Monitor', action:'CPU spike detected on edge function #3', time:'1h 22m ago', status:'success', color:'#10b981' },
+  { agent:'KB Agent', action:'Semantic search index rebuilt successfully', time:'2h ago', status:'success', color:'#10b981' },
+];
+
+let activityLog = [...ACTIVITY_SEED];
+
+function renderActivity(){
+  const feed = document.getElementById('activity-feed');
+  feed.innerHTML = activityLog.map(a=>`
+    <div class="activity-item">
+      <div class="activity-dot" style="background:${a.color}"></div>
+      <div class="activity-content">
+        <div class="activity-agent">${a.agent}</div>
+        <div class="activity-action">${a.action}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+          <div class="activity-time">${a.time}</div>
+          <span class="activity-status ${a.status}">${a.status}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addActivity(agent, action, status){
+  activityLog.unshift({ agent, action, time:'just now', status, color:'#7c3aed' });
+  if(activityLog.length>10) activityLog.pop();
+  renderActivity();
+}
+
+// KB SEARCH
+const KB_MOCK = [
+  'Delta Jobs scoring rubric v2.3',
+  'PopeBot system prompt — full context',
+  'n8n workflow: outreach automation blueprint',
+  'Supabase schema — opportunities table',
+  'GHL pipeline stages & automation rules',
+  'API rate limits & cost optimization guide',
+  'Weekly reporting template — AI metrics',
+];
+
+function searchKB(query){
+  const resultsEl = document.getElementById('kb-results');
+  if(!query || query.length < 2){ resultsEl.style.display='none'; return; }
+  const results = KB_MOCK.filter(r=>r.toLowerCase().includes(query.toLowerCase()));
+  if(!results.length){ resultsEl.style.display='none'; return; }
+  resultsEl.style.display='block';
+  resultsEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">${results.map(r=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--navy);border:1px solid var(--border-2);border-radius:8px;cursor:pointer;transition:border-color 0.2s"
+         onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border-2)'">
+      <span style="font-size:12px">📄</span>
+      <span style="font-size:11px;color:var(--text-dim)">${r}</span>
+    </div>
+  `).join('')}</div>`;
+}
+
+async function runHealthCheck(){
+  const services = document.querySelectorAll('.status-card');
+  services.forEach(s=>{s.style.opacity='0.6';});
+  await new Promise(r=>setTimeout(r,1500));
+  services.forEach(s=>{s.style.opacity='1';});
+  addActivity('System', 'Health check completed — all 6 services nominal', 'success');
+}
+
+// INIT
+renderServices();
+renderWorkflows();
+renderActivity();
+</script>
+</body>
+</html>
