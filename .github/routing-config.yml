@@ -1,7 +1,8 @@
 # Dispatch Routing Map — Canonical Config
 # Source of truth for: Notion "Dispatch Routing Map" page
 # Repo: rtmendes/knowledge-base-nextra
-# Last updated: 2026-04-13
+# Last updated: 2026-04-14
+# Updated by: Cowork audit — Vercel MCP + DNS + HTTP checks
 
 routes:
 
@@ -14,8 +15,8 @@ routes:
   publication_writing:
     intent: ["write an article", "draft a post", pitch, blog]
     destination: Elite Writer
-    endpoint: TBD  # app confirmed, production URL pending
-    status: tbd
+    endpoint: TBD  # Vercel project exists but NEVER DEPLOYED. Coolify subdomain (elite-writer-app.insightprofit.live) returns 503. Fix tracked in ClickUp task 86e0wzwye.
+    status: blocked
 
   ai_platform:
     intent: [polsia, "AI API", "model endpoint"]
@@ -32,8 +33,9 @@ routes:
   knowledge_base:
     intent: ["add to KB", "knowledge base", ingest, "save to knowledge"]
     destination: Nextra + Neon
-    endpoint: "https://knowledge-base-nextra.vercel.app"
-    status: unverified
+    endpoint: "https://kb.insightprofit.live"  # confirmed custom domain via Vercel MCP 2026-04-14
+    fallback: "https://knowledge-base-nextra.vercel.app"
+    status: confirmed
 
   code_deploy:
     intent: ["push to github", deploy, "fix the build", "update code"]
@@ -44,8 +46,9 @@ routes:
   command_center:
     intent: [dashboard, "mission control", "project status"]
     destination: Command Center
-    endpoint: "https://command.insightprofit.live"
-    status: active
+    endpoint: "https://center.insightprofit.live"  # FIXED 2026-04-14: was command.insightprofit.live (wrong — Oracle server, SSL broken). Correct domain confirmed via Vercel MCP.
+    fallback: "https://command-center-rouge-pi.vercel.app"
+    status: confirmed
 
   marketing_funnels:
     intent: [funnel, checkout, GHL, "order form"]
@@ -59,13 +62,14 @@ routes:
     storefront: "https://familygiftstudio.com"
     admin: "https://familydesignstudio.myshopify.com/admin"
     api_token_ref: "SHOPIFY_FGS_TOKEN (shpat_cbaf3d37... — see Notion KEYS)"
-    status: confirmed  # 2026-04-13
+    vercel_engine: "https://family-gift-studio-engine-rashida-mendes-projects.vercel.app"  # build error — fix tracked in ClickUp 86e0wzx3x
+    status: partial  # Shopify confirmed; Vercel engine in ERROR state
 
   video_content:
     intent: [video, vidrevamp, youtube, "viral hook"]
     destination: VidRevamp
-    endpoint: "https://vidrevamp.vercel.app"
-    status: unverified
+    endpoint: "https://vidrevamp.vercel.app"  # Vercel deployment READY but runtime HTTP 500 — fix tracked in ClickUp 86e0wzwr6
+    status: error
 
   aviation:
     intent: [aviation, pilot, FAA, cargo, flight, propel]
