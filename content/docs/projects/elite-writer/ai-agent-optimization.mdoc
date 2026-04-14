@@ -1,0 +1,200 @@
+---
+title: "AI Agent Optimization — Elite Writer"
+description: "AI workflow map and automation for Elite Writer"
+status: "published"
+category: "Project Pipeline"
+tags:
+  - "ai"
+  - "automation"
+  - "elite-writer"
+source: "project-pipeline"
+importedAt: "2026-04-13T00:00:00Z"
+---
+
+{
+  "root": {
+    "type": "root",
+    "children": [
+      {
+        "type": "heading",
+        "level": 1,
+        "children": [
+          {
+            "type": "text",
+            "text": "AI Agent Optimization \u2014 Elite Writer"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Core AI Workflows"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Voice Calibration: User submits 5 writing samples \u2192 Claude analyzes vocabulary, sentence structure, tone patterns \u2192 outputs Voice Profile JSON"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Batch Content Generation: User inputs content pillars + voice profile \u2192 Claude generates 30 posts in structured JSON \u2192 formatted for Notion or Google Sheets"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Quality Scoring: Each output sent to second Claude call with rubric \u2192 scored 1\u201310 on voice match, clarity, CTA strength"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Repurposing Engine: Long-form content input \u2192 AI extracts 5 short-form pieces for each channel"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "LLM Recommendations"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Voice analysis and content generation: Claude claude-sonnet-4-6 \u2014 best context retention for style matching"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Quality scoring: Claude Haiku \u2014 fast, cheap, structured output"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Image caption + visual content suggestions: GPT-4o Vision"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Batch scheduling: n8n or Make.com orchestration layer"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Prompt Architecture"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "children": [
+          {
+            "type": "text",
+            "text": "Voice Profile Extraction Prompt: 'Analyze these writing samples and extract: (1) average sentence length, (2) favorite transition phrases, (3) humor style, (4) most-used power words, (5) emotional register. Return as JSON with examples from the text.'"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "children": [
+          {
+            "type": "text",
+            "text": "Content Generation Prompt: 'Using the attached voice profile, write a [format] about [topic] for [platform]. Match the vocabulary, tone, and sentence rhythm from the profile. Do not use words in the banned list. End with a CTA consistent with the profile style.'"
+          }
+        ]
+      }
+    ]
+  }
+}

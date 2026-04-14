@@ -1,0 +1,286 @@
+---
+title: "AI Agent Optimization — PopeBot / InsightProfit"
+description: "AI workflow map, automation priorities, LLM selection, and prompt templates"
+status: "published"
+category: "Project Pipeline"
+tags:
+  - "ai"
+  - "automation"
+  - "popebot"
+  - "insightprofit"
+source: "project-pipeline"
+importedAt: "2026-04-13T00:00:00Z"
+---
+
+{
+  "root": {
+    "type": "root",
+    "children": [
+      {
+        "type": "heading",
+        "level": 1,
+        "children": [
+          {
+            "type": "text",
+            "text": "AI Agent Optimization \u2014 PopeBot / InsightProfit"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Core Automation Priorities"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Revenue reporting: Auto-pull Stripe/ThriveCart data \u2192 summarize weekly \u2192 email digest"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Content generation: VSL scripts, email sequences, ad copy from single brief"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Customer Q&A: PopeBot handles support queries using KB context"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Competitor monitoring: Weekly scrape of competitor offers and pricing"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Onboarding sequences: Auto-trigger based on purchase event"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "LLM Selection"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "PopeBot (RAG): Claude claude-sonnet-4-6 \u2014 best in class for long-context KB retrieval"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Content drafts: Claude claude-sonnet-4-6 or GPT-4o \u2014 both strong for marketing copy"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Data analysis: GPT-4o with Code Interpreter or Claude + custom Python tools"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lightweight tasks (classification, tagging): Claude Haiku or GPT-4o-mini for cost efficiency"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Key Workflows"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Weekly Profit Report: Zapier \u2192 Stripe API \u2192 Claude summarization \u2192 email via ConvertKit"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Content Pipeline: Notion brief \u2192 Claude claude-sonnet-4-6 \u2192 formatted drafts in Notion"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "PopeBot Q&A: User query \u2192 Nextra KB search \u2192 Claude with retrieved context \u2192 response"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Competitor Intel: Apify web scraper \u2192 Claude analysis \u2192 Slack alert"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Prompt Templates"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "children": [
+          {
+            "type": "text",
+            "text": "Weekly Report Prompt: 'You are InsightProfit's revenue analyst. Given the following Stripe data for [period], identify the top 3 revenue drivers, 2 biggest drop-offs, and 1 recommended action. Format as a 200-word executive summary.'"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "children": [
+          {
+            "type": "text",
+            "text": "Content Prompt: 'You are the InsightProfit brand voice \u2014 direct, data-backed, slightly provocative. Write a [format] about [topic] for an audience of online entrepreneurs doing $5K\u2013$100K/month. Lead with a counter-intuitive hook.'"
+          }
+        ]
+      }
+    ]
+  }
+}

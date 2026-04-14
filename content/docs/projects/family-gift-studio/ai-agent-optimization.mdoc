@@ -1,0 +1,186 @@
+---
+title: "AI Agent Optimization — Family Gift Studio"
+description: "AI workflow map for Family Gift Studio"
+status: "published"
+category: "Project Pipeline"
+tags:
+  - "ai"
+  - "automation"
+  - "family-gift-studio"
+source: "project-pipeline"
+importedAt: "2026-04-13T00:00:00Z"
+---
+
+{
+  "root": {
+    "type": "root",
+    "children": [
+      {
+        "type": "heading",
+        "level": 1,
+        "children": [
+          {
+            "type": "text",
+            "text": "AI Agent Optimization \u2014 Family Gift Studio"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Core AI Workflows"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Portrait Generation: Customer uploads photos \u2192 face-swap or style-transfer pipeline using Stable Diffusion / Flux \u2192 3 style variants delivered for customer to choose"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Storybook Illustration: Customer inputs names, theme, and 5 key plot points \u2192 Claude writes 24-page script \u2192 Midjourney/DALL-E generates matching illustrations \u2192 assembled into print-ready PDF"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Recipe Book Layout: Customer submits recipes via form \u2192 Claude formats and adds headnotes \u2192 design template applied \u2192 PDF output"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Quality Check: Every AI output reviewed by Claude for text errors, then flagged for human review if quality score <8"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Customer Communication: Order status emails, revision requests, and delivery confirmations automated via Klaviyo + Claude drafts"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "LLM Roles"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Content writing (storybook text, recipe headnotes): Claude claude-sonnet-4-6"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Image generation: Midjourney API or Replicate (Flux/SDXL) for portraits and illustrations"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Quality scoring: Claude Haiku \u2014 fast pass/fail on image and text quality"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Customer service drafts: Claude claude-sonnet-4-6 with brand voice prompt"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
