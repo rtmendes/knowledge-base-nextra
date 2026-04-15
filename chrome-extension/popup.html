@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      width: 420px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      background: #fafafa;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 17px;
+      margin: 0;
+      color: #222;
+      line-height: 1.3;
+    }
+    .config-badge {
+      font-size: 10px;
+      background: #e8f5e9;
+      color: #388e3c;
+      border: 1px solid #a5d6a7;
+      border-radius: 10px;
+      padding: 2px 8px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .config-badge:hover { background: #c8e6c9; }
+    .config-badge.stale { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
+
+    /* ── Announcement banner ─────────────────────────────── */
+    #announcement {
+      display: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    #announcement.info    { background: #e3f2fd; border: 1px solid #90caf9; color: #0d47a1; }
+    #announcement.warning { background: #fff8e1; border: 1px solid #ffe082; color: #e65100; }
+    #announcement.success { background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b5e20; }
+
+    /* ── Stats ───────────────────────────────────────────── */
+    .stats {
+      background: white;
+      border: 1px solid #e0e0e0;
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 3px 0;
+    }
+    .stat-label { color: #666; }
+    .stat-value { font-weight: 600; color: #4CAF50; }
+    .stat-value.blue { color: #2196F3; }
+
+    /* ── Cards / collapsible sections ────────────────────── */
+    .card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      background: #f5f5f5;
+      user-select: none;
+    }
+    .card-header:hover { background: #eeeeee; }
+    .card-header .arrow { font-size: 10px; transition: transform 0.2s; }
+    .card-header.open .arrow { transform: rotate(90deg); }
+    .card-body {
+      padding: 12px 14px;
+      display: none;
+      border-top: 1px solid #e0e0e0;
+    }
+    .card-body.open { display: block; }
+
+    /* ── Prompt templates ────────────────────────────────── */
+    .template-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      color: #333;
+    }
+    .template-btn:hover { background: #e3f2fd; border-color: #90caf9; }
+    .template-btn.active { background: #e8f5e9; border-color: #4CAF50; }
+
+    /* ── Auto-submit ─────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 22px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 22px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px; width: 16px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #4CAF50; }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+    textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      resize: vertical;
+      line-height: 1.4;
+    }
+    textarea:focus { outline: none; border-color: #4CAF50; }
+    .hint { font-size: 11px; color: #888; margin-top: 4px; }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn-group { display: flex; gap: 8px; margin-bottom: 10px; }
+    .btn {
+      flex: 1;
+      padding: 10px 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+    .btn:hover { filter: brightness(0.92); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-green  { background: #4CAF50; color: white; }
+    .btn-blue   { background: #2196F3; color: white; }
+    .btn-indigo { background: #5c6bc0; color: white; }
+    .btn-red    { background: #ef5350; color: white; }
+    .btn-gray   { background: #e0e0e0; color: #333; }
+
+    /* ── Preview list ────────────────────────────────────── */
+    #preview {
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .preview-item {
+      padding: 6px 0;
+      border-bottom: 1px solid #f0f0f0;
+      line-height: 1.4;
+    }
+    .preview-item:last-child { border-bottom: none; }
+
+    /* ── Status toast ────────────────────────────────────── */
+    #status {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+      display: none;
+    }
+    #status.success { background: #e8f5e9; color: #1b5e20; display: block; }
+    #status.error   { background: #ffebee; color: #b71c1c; display: block; }
+    #status.info    { background: #e3f2fd; color: #0d47a1; display: block; }
+
+    /* ── KB link ─────────────────────────────────────────── */
+    .kb-link {
+      display: block;
+      text-align: center;
+      font-size: 11px;
+      color: #888;
+      margin-top: 10px;
+      text-decoration: none;
+    }
+    .kb-link:hover { color: #4CAF50; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <div class="header">
+    <h1>🔗 Genspark KB Extractor</h1>
+    <span id="configBadge" class="config-badge" title="Remote config version — click to refresh">
+      ↻ config...
+    </span>
+  </div>
+
+  <!-- ── Announcement banner (hidden by default) ─────────── -->
+  <div id="announcement"></div>
+
+  <!-- ── Stats ─────────────────────────────────────────────── -->
+  <div class="stats">
+    <div class="stat-row">
+      <span class="stat-label">Chats captured:</span>
+      <span class="stat-value" id="totalChats">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Sent to KB:</span>
+      <span class="stat-value blue" id="kbStatus">checking…</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Last captured:</span>
+      <span class="stat-value" id="lastCaptured" style="font-size:11px;color:#666;font-weight:400;">—</span>
+    </div>
+  </div>
+
+  <!-- ── Action buttons ─────────────────────────────────────── -->
+  <div class="btn-group">
+    <button id="downloadBtn" class="btn btn-green" disabled>📥 CSV</button>
+    <button id="viewBtn"     class="btn btn-blue"  disabled>👀 Preview</button>
+    <button id="clearBtn"    class="btn btn-red"   disabled>🗑️ Clear</button>
+  </div>
+
+  <!-- ── Prompt templates (from remote config) ──────────────── -->
+  <div class="card" id="templatesCard">
+    <div class="card-header" id="templatesHeader">
+      <span>📋 Prompt Templates</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="card-body" id="templatesBody">
+      <div id="templatesList">
+        <div class="hint" style="padding:4px 0;">Loading templates from server…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Auto-submit ────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header" id="autoSubmitHeader">
+      <span>🤖 Auto-Submit Prompt</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="card-body" id="autoSubmitBody">
+      <div class="toggle-row">
+        <span>Enable auto-submit</span>
+        <label class="switch">
+          <input type="checkbox" id="autoSubmitToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <textarea id="promptText" rows="3"
+        placeholder="Paste a prompt here — it will be automatically submitted to every chat you visit…"></textarea>
+      <div class="hint">Tip: Use a template above to fill this in instantly.</div>
+    </div>
+  </div>
+
+  <!-- ── Captured chats preview ────────────────────────────── -->
+  <div class="card" id="previewCard" style="display:none;">
+    <div class="card-header open" id="previewHeader">
+      <span>🗂 Recent Captures</span>
+      <span class="arrow" style="transform:rotate(90deg)">▶</span>
+    </div>
+    <div class="card-body open" id="previewBody">
+      <div id="preview"></div>
+    </div>
+  </div>
+
+  <!-- ── Config / status ────────────────────────────────────── -->
+  <div id="status"></div>
+  <a class="kb-link" href="https://kb.insightprofit.live" target="_blank">
+    🌐 Open Knowledge Base →
+  </a>
+
+  <script src="popup.js"></script>
+</body>
+</html>
