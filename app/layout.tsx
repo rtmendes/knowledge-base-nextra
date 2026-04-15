@@ -2,6 +2,7 @@ import { Layout, Navbar } from 'nextra-theme-docs'
 import 'nextra-theme-docs/style.css'
 import type { ReactNode } from 'react'
 import { getNavTree, navTreeToPageMap } from '../lib/page-map'
+import { ChatWidget } from '../components/ChatWidget'
 
 export const metadata = {
   title: 'InsightProfit Knowledge Base',
@@ -102,6 +103,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         >
           {children}
         </Layout>
+        <ChatWidget />
       </body>
     </html>
   )
