@@ -8,23 +8,56 @@ export const metadata = {
   description: 'Complete knowledge base for Insight Profit products and workflows',
 }
 
+// ── Static pages that always appear in the sidebar ──────────────────────────
+// These are App Router MDX pages NOT managed by Keystatic, so we hardcode them.
+const STATIC_PAGE_MAP: any[] = [
+  {
+    kind: 'MdxPage',
+    name: 'index',
+    route: '/',
+    frontMatter: { title: 'Home' },
+  },
+  {
+    kind: 'MdxPage',
+    name: 'genspark',
+    route: '/genspark',
+    frontMatter: { title: '⚡ Genspark Projects' },
+  },
+  {
+    kind: 'Folder',
+    name: 'ai-research',
+    route: '/ai-research',
+    children: [
+      {
+        kind: 'MdxPage',
+        name: 'manus',
+        route: '/ai-research/manus',
+        frontMatter: { title: '🤖 Manus AI Research' },
+      },
+    ],
+  },
+]
+
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  // Build sidebar from Keystatic content (falls back to empty if content dir missing)
-  // IMPORTANT: Nextra v4's normalizePages does "data" in list[0] without
-  // guarding against empty arrays. pageMap must NEVER be [].
-  const FALLBACK_PAGE_MAP = [
-    { kind: 'MdxPage' as const, name: 'index', route: '/', frontMatter: { title: 'Home' } },
-  ]
-  let pageMap: any[] = FALLBACK_PAGE_MAP
+  // Try to load additional Keystatic docs and merge them into the sidebar.
+  // If Keystatic reader fails (no content yet, or GitHub storage issues in prod),
+  // we still show the hardcoded pages above.
+  let pageMap: any[] = STATIC_PAGE_MAP
+
   try {
     const tree = await getNavTree()
-    const mapped = navTreeToPageMap(tree)
-    // Only use mapped result if non-empty; otherwise keep the fallback
-    if (mapped.length > 0) {
-      pageMap = mapped
+    const dynamic = navTreeToPageMap(tree).filter(
+      // Remove any Keystatic entries that duplicate our static pages
+      (item: any) =>
+        item.name !== 'index' &&
+        item.name !== 'genspark' &&
+        item.name !== 'ai-research'
+    )
+    if (dynamic.length > 0) {
+      pageMap = [...STATIC_PAGE_MAP, ...dynamic]
     }
   } catch {
-    // Content directory not yet populated — fallback already set above
+    // Content directory not yet populated — static pages are enough
   }
 
   return (
@@ -34,7 +67,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           navbar={
             <Navbar
               logo={
-                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                <span style={{ fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.01em' }}>
                   InsightProfit KB
                 </span>
               }
@@ -53,12 +86,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 justifyContent: 'center',
                 gap: '1.5rem',
                 flexWrap: 'wrap',
+                fontSize: '0.875rem',
+                color: '#6b7280',
               }}
             >
               <span>© 2026 Insight Profit. All rights reserved.</span>
               <a
                 href="/keystatic"
-                style={{ color: '#6b7280', textDecoration: 'none', fontSize: '0.875rem' }}
+                style={{ color: '#6b7280', textDecoration: 'none' }}
               >
                 ✏️ Admin Editor
               </a>
