@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { reader } from '../../lib/keystatic'
 import { DocRenderer } from '../../components/DocRenderer'
+import { ShareBar } from '../../components/ShareBar'
 
 interface Props {
   params: Promise<{ slug?: string[] }>
@@ -92,8 +93,18 @@ export default async function DocPage({ params }: Props) {
       {/* Rich text content */}
       <DocRenderer document={content} />
 
+      {/* Share / download / source links */}
+      <div className="mt-10 pt-6 border-t border-gray-200 dark:border-gray-700">
+        <ShareBar
+          title={doc.title}
+          slug={docSlug}
+          sourceUrl={doc.sourceUrl ?? undefined}
+          shareUrl={doc.shareUrl ?? undefined}
+        />
+      </div>
+
       {/* Edit link */}
-      <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-4">
         <a
           href={`/keystatic/collection/docs/item/${encodeURIComponent(docSlug)}`}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"

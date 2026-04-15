@@ -1,28 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
 import { logImport } from '../../../../lib/supabase'
 
+const OWNER = 'rtmendes'
+const REPO = 'knowledge-base-nextra'
+const GH_API = `https://api.github.com/repos/${OWNER}/${REPO}/contents`
+
 /**
- * Genspark / Manus Content Importer
+ * Genspark / Manus Content Importer — GitHub-backed
  *
  * POST /api/import/genspark
- * Body: {
- *   url: string           // Genspark share URL or Manus URL
- *   slug: string          // target slug, e.g. "insightprofit-popebot/my-guide"
- *   title?: string        // override title
- *   category?: string
- *   tags?: string[]
- *   status?: 'active'|'draft'
- *   embedInstead?: boolean  // if true, creates an EmbedBlock page instead of importing content
+ * Auth: Bearer {AGENT_API_KEY}
+ *
+ * Body:
+ * {
+ *   url:             string   — Genspark/Manus source URL
+ *   slug:            string   — target path, e.g. "genspark/my-project"
+ *   title?:          string
+ *   description?:    string
+ *   category?:       string
+ *   tags?:           string[]
+ *   status?:         'active' | 'draft'
+ *   markdownContent? string   — full scraped text/markdown of the page
+ *   shareUrl?:       string   — public share link for the page
+ *   subLinks?:       { url: string; slug: string; title: string; markdownContent?: string }[]
+ *   files?:          { name: string; url: string; type?: string }[]
+ *   triggerDeploy?:  boolean  — omit [skip vercel] to force a deployment
  * }
  */
 
 function authorize(req: NextRequest): boolean {
   const key = process.env.AGENT_API_KEY
   if (!key) return true
-  const auth = req.headers.get('authorization')
-  return auth === `Bearer ${key}`
+  return req.headers.get('authorization') === `Bearer ${key}`
 }
 
 function slugify(text: string): string {
@@ -32,231 +41,202 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
-function buildDocContent(options: {
-  url: string
-  title: string
-  embedInstead?: boolean
-  markdownContent?: string
-  description?: string
-}): string {
-  const { url, title, embedInstead, markdownContent, description } = options
+function sanitizeSlug(raw: string): string {
+  return raw.split('/').map(slugify).filter(Boolean).join('/')
+}
 
-  if (embedInstead) {
-    // Create a page that iframes the Genspark/Manus content
-    return JSON.stringify([
-      {
-        type: 'paragraph',
-        children: [
-          {
-            text: description || `Interactive content from ${url}`,
-          },
-        ],
-      },
-      {
-        type: 'component-block',
-        component: 'EmbedBlock',
-        props: {
-          url,
-          title,
-          height: 800,
-        },
-        children: [{ type: 'paragraph', children: [{ text: '' }] }],
-      },
-    ])
+async function commitFile(
+  filePath: string,
+  content: string,
+  commitMessage: string,
+  token: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const url = `${GH_API}/${filePath}`
+  const headers = {
+    Authorization: `token ${token}`,
+    Accept: 'application/vnd.github.v3+json',
+    'Content-Type': 'application/json',
   }
 
-  if (markdownContent) {
-    // Convert markdown paragraphs to Keystatic document nodes
-    const lines = markdownContent.split('\n')
-    const nodes: any[] = []
-    let inCodeBlock = false
-    let codeLines: string[] = []
-    let codeLang = ''
+  let existingSha: string | undefined
+  try {
+    const check = await fetch(url, { headers })
+    if (check.ok) existingSha = (await check.json()).sha
+  } catch {}
 
-    for (const line of lines) {
-      if (line.startsWith('```')) {
-        if (inCodeBlock) {
-          nodes.push({
-            type: 'code',
-            language: codeLang || 'text',
-            children: [{ text: codeLines.join('\n') }],
-          })
-          inCodeBlock = false
-          codeLines = []
-          codeLang = ''
-        } else {
-          inCodeBlock = true
-          codeLang = line.slice(3).trim()
-        }
-        continue
-      }
-      if (inCodeBlock) { codeLines.push(line); continue }
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      message: commitMessage,
+      content: Buffer.from(content, 'utf-8').toString('base64'),
+      ...(existingSha ? { sha: existingSha } : {}),
+    }),
+  })
 
-      if (line.startsWith('# ')) {
-        nodes.push({ type: 'heading', level: 1, children: [{ text: line.slice(2) }] })
-      } else if (line.startsWith('## ')) {
-        nodes.push({ type: 'heading', level: 2, children: [{ text: line.slice(3) }] })
-      } else if (line.startsWith('### ')) {
-        nodes.push({ type: 'heading', level: 3, children: [{ text: line.slice(4) }] })
-      } else if (line.startsWith('#### ')) {
-        nodes.push({ type: 'heading', level: 4, children: [{ text: line.slice(5) }] })
-      } else if (line.match(/^[-*+] /)) {
-        nodes.push({
-          type: 'unordered-list',
-          children: [{ type: 'list-item', children: [{ type: 'paragraph', children: [{ text: line.slice(2) }] }] }],
-        })
-      } else if (line.match(/^\d+\. /)) {
-        nodes.push({
-          type: 'ordered-list',
-          children: [{ type: 'list-item', children: [{ type: 'paragraph', children: [{ text: line.replace(/^\d+\. /, '') }] }] }],
-        })
-      } else if (line.startsWith('> ')) {
-        nodes.push({ type: 'blockquote', children: [{ type: 'paragraph', children: [{ text: line.slice(2) }] }] })
-      } else if (line.startsWith('---') && line.trim() === '---') {
-        nodes.push({ type: 'divider', children: [{ text: '' }] })
-      } else if (line.trim()) {
-        nodes.push({ type: 'paragraph', children: [{ text: line }] })
-      }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }))
+    return { ok: false, error: err.message || 'GitHub push failed' }
+  }
+  return { ok: true }
+}
+
+function markdownToNodes(md: string): any[] {
+  const nodes: any[] = []
+  const lines = md.split('\n')
+  let inCode = false
+  let codeLines: string[] = []
+  let codeLang = ''
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      if (inCode) {
+        nodes.push({ type: 'code', language: codeLang || 'text', children: [{ text: codeLines.join('\n') }] })
+        inCode = false; codeLines = []; codeLang = ''
+      } else { inCode = true; codeLang = line.slice(3).trim() }
+      continue
     }
+    if (inCode) { codeLines.push(line); continue }
 
-    return JSON.stringify(nodes)
+    if      (line.startsWith('#### ')) nodes.push({ type: 'heading', level: 4, children: [{ text: line.slice(5) }] })
+    else if (line.startsWith('### '))  nodes.push({ type: 'heading', level: 3, children: [{ text: line.slice(4) }] })
+    else if (line.startsWith('## '))   nodes.push({ type: 'heading', level: 2, children: [{ text: line.slice(3) }] })
+    else if (line.startsWith('# '))    nodes.push({ type: 'heading', level: 1, children: [{ text: line.slice(2) }] })
+    else if (line.match(/^[-*+] /))    nodes.push({ type: 'unordered-list', children: [{ type: 'list-item', children: [{ type: 'paragraph', children: [{ text: line.slice(2) }] }] }] })
+    else if (line.match(/^\d+\. /))    nodes.push({ type: 'ordered-list', children: [{ type: 'list-item', children: [{ type: 'paragraph', children: [{ text: line.replace(/^\d+\. /, '') }] }] }] })
+    else if (line.startsWith('> '))    nodes.push({ type: 'blockquote', children: [{ type: 'paragraph', children: [{ text: line.slice(2) }] }] })
+    else if (line.trim() === '---')    nodes.push({ type: 'divider', children: [{ text: '' }] })
+    else if (line.trim())              nodes.push({ type: 'paragraph', children: [{ text: line }] })
   }
 
-  // Default: stub page with source link
-  return JSON.stringify([
-    {
-      type: 'paragraph',
-      children: [{ text: `Source: ${url}` }],
-    },
-    {
-      type: 'component-block',
-      component: 'EmbedBlock',
-      props: { url, title, height: 700 },
+  return nodes
+}
+
+function buildMdoc(opts: {
+  title: string
+  description?: string
+  status: string
+  category?: string
+  tags: string[]
+  sourceUrl: string
+  shareUrl?: string
+  markdownContent?: string
+  files?: { name: string; url: string; type?: string }[]
+}): string {
+  const { title, description, status, category, tags, sourceUrl, shareUrl, markdownContent, files = [] } = opts
+
+  const fm = [
+    '---',
+    `title: "${title.replace(/"/g, '\\"')}"`,
+    ...(description ? [`description: "${description.replace(/"/g, '\\"')}"`] : []),
+    `status: "${status}"`,
+    ...(category ? [`category: "${category}"`] : []),
+    ...(tags.length ? [`tags:\n${tags.map(t => `  - "${t}"`).join('\n')}`] : []),
+    `source: genspark`,
+    `sourceUrl: "${sourceUrl}"`,
+    ...(shareUrl ? [`shareUrl: "${shareUrl}"`] : []),
+    `importedAt: "${new Date().toISOString()}"`,
+    '---',
+    '',
+  ].join('\n')
+
+  const nodes: any[] = []
+
+  // Source + share link header
+  nodes.push({ type: 'paragraph', children: [{ text: 'Source: ' }, { type: 'link', href: sourceUrl, children: [{ text: sourceUrl }] }] })
+  if (shareUrl) {
+    nodes.push({ type: 'paragraph', children: [{ text: '🔗 Share: ' }, { type: 'link', href: shareUrl, children: [{ text: shareUrl }] }] })
+  }
+
+  // File attachments
+  if (files.length > 0) {
+    nodes.push({ type: 'heading', level: 2, children: [{ text: 'Project Files' }] })
+    for (const f of files) {
+      nodes.push({
+        type: 'component-block', component: 'FileAttachment',
+        props: { url: f.url, filename: f.name, description: '', fileType: f.type || '' },
+        children: [{ type: 'paragraph', children: [{ text: '' }] }],
+      })
+    }
+  }
+
+  // Page content or iframe embed fallback
+  if (markdownContent) {
+    nodes.push(...markdownToNodes(markdownContent))
+  } else {
+    nodes.push({
+      type: 'component-block', component: 'EmbedBlock',
+      props: { url: sourceUrl, title, height: 800 },
       children: [{ type: 'paragraph', children: [{ text: '' }] }],
-    },
-  ])
+    })
+  }
+
+  return fm + JSON.stringify(nodes)
 }
 
 export async function POST(req: NextRequest) {
-  if (!authorize(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!authorize(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: any
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-  }
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
 
   const {
-    url,
-    slug,
-    title,
-    category,
-    tags = [],
-    status = 'active',
-    embedInstead = false,
-    description = '',
+    url, slug, title, description = '', category, tags = [],
+    status = 'active', markdownContent, shareUrl,
+    subLinks = [], files = [], triggerDeploy = false,
   } = body
 
-  if (!url || !slug) {
-    return NextResponse.json({ error: 'url and slug are required' }, { status: 400 })
+  if (!url || !slug) return NextResponse.json({ error: 'url and slug are required' }, { status: 400 })
+
+  const token = process.env.GITHUB_TOKEN
+  if (!token) return NextResponse.json({ error: 'GITHUB_TOKEN not configured on server' }, { status: 500 })
+
+  const safeSlug = sanitizeSlug(slug)
+  const docTitle = title || safeSlug.split('/').pop()?.replace(/-/g, ' ') || 'Imported Page'
+  const skipTag = triggerDeploy ? '' : ' [skip vercel]'
+  const committed: string[] = []
+  const errors: string[] = []
+
+  // ── Main page ─────────────────────────────────────────────────────────────
+  const mainResult = await commitFile(
+    `content/docs/${safeSlug}.mdoc`,
+    buildMdoc({ title: docTitle, description, status, category, tags, sourceUrl: url, shareUrl, markdownContent, files }),
+    `kb: import "${docTitle}"${skipTag}`,
+    token,
+  )
+  if (mainResult.ok) {
+    committed.push(`content/docs/${safeSlug}.mdoc`)
+    await logImport({ source: 'genspark', url, slug: safeSlug, title: docTitle, status: 'success' })
+  } else {
+    errors.push(`main: ${mainResult.error}`)
+    await logImport({ source: 'genspark', url, slug: safeSlug, title: docTitle, status: 'error', error: mainResult.error })
   }
 
-  const safeSlug = slug
-    .split('/')
-    .map(slugify)
-    .join('/')
-
-  const docTitle = title || slug.split('/').pop()?.replace(/-/g, ' ') || 'Imported Page'
-
-  let fetchedMarkdown: string | undefined
-  let fetchedTitle = docTitle
-
-  // Attempt to fetch content from URL if not embed mode
-  if (!embedInstead) {
-    try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'InsightProfit-KB-Bot/1.0' },
-        signal: AbortSignal.timeout(10000),
-      })
-      if (res.ok) {
-        const html = await res.text()
-        // Extract title from HTML
-        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-        if (titleMatch) fetchedTitle = titleMatch[1].replace(' | Genspark', '').trim()
-        // We can't easily extract clean markdown from HTML here without a parser
-        // The page will be embedded; for real content extraction, use the /api/import/upload endpoint
-      }
-    } catch {
-      // Fetch failed — will create embed page instead
-    }
+  // ── Sub-link pages ────────────────────────────────────────────────────────
+  for (const sub of subLinks) {
+    if (!sub.url || !sub.slug) continue
+    const subSlug = sanitizeSlug(sub.slug)
+    const subTitle = sub.title || subSlug.split('/').pop()?.replace(/-/g, ' ') || 'Sub Page'
+    const subResult = await commitFile(
+      `content/docs/${subSlug}.mdoc`,
+      buildMdoc({ title: subTitle, description: `Sub-page of ${docTitle}`, status: 'active', category, tags, sourceUrl: sub.url, markdownContent: sub.markdownContent }),
+      `kb: import subpage "${subTitle}"${skipTag}`,
+      token,
+    )
+    if (subResult.ok) committed.push(`content/docs/${subSlug}.mdoc`)
+    else errors.push(`${subSlug}: ${subResult.error}`)
   }
 
-  const finalTitle = title || fetchedTitle || docTitle
-  const contentJson = buildDocContent({
-    url,
-    title: finalTitle,
-    embedInstead: embedInstead || !fetchedMarkdown,
-    markdownContent: fetchedMarkdown,
-    description,
+  if (committed.length === 0) return NextResponse.json({ success: false, errors }, { status: 500 })
+
+  return NextResponse.json({
+    success: true,
+    committed,
+    ...(errors.length ? { errors } : {}),
+    viewUrl: `https://kb.insightprofit.live/${safeSlug}`,
+    editUrl: `https://kb.insightprofit.live/keystatic/collection/docs/item/${encodeURIComponent(safeSlug)}`,
   })
-
-  // Build the .mdoc file content (YAML frontmatter + JSON content)
-  const frontmatter = [
-    `title: "${finalTitle.replace(/"/g, '\\"')}"`,
-    description ? `description: "${description.replace(/"/g, '\\"')}"` : '',
-    `status: "${status}"`,
-    category ? `category: "${category}"` : '',
-    tags.length ? `tags:\n${tags.map((t: string) => `  - "${t}"`).join('\n')}` : '',
-    `source: genspark`,
-    `sourceUrl: "${url}"`,
-    `importedAt: "${new Date().toISOString()}"`,
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-  const mdocContent = `---\n${frontmatter}\n---\n\n${contentJson}`
-
-  // Write to content/docs/[slug].mdoc
-  const parts = safeSlug.split('/')
-  const dir = join(process.cwd(), 'content', 'docs', ...parts.slice(0, -1))
-  const filename = `${parts[parts.length - 1]}.mdoc`
-  const filepath = join(dir, filename)
-
-  try {
-    await mkdir(dir, { recursive: true })
-    await writeFile(filepath, mdocContent, 'utf-8')
-
-    await logImport({
-      source: 'genspark',
-      url,
-      slug: safeSlug,
-      title: finalTitle,
-      status: 'success',
-    })
-
-    return NextResponse.json({
-      success: true,
-      slug: safeSlug,
-      title: finalTitle,
-      file: `content/docs/${safeSlug}.mdoc`,
-      viewUrl: `https://kb.insightprofit.live/${safeSlug}`,
-      editUrl: `https://kb.insightprofit.live/keystatic/collection/docs/item/${encodeURIComponent(safeSlug)}`,
-      note: 'File written to repo. Commit and push to deploy, or use Keystatic admin to review.',
-    })
-  } catch (err: any) {
-    await logImport({
-      source: 'genspark',
-      url,
-      slug: safeSlug,
-      title: finalTitle,
-      status: 'error',
-      error: err.message,
-    })
-    return NextResponse.json({ error: err.message }, { status: 500 })
-  }
 }

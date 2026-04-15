@@ -57,6 +57,16 @@ export default config({
           publicPath: '/images/docs/',
           validation: { isRequired: false },
         }),
+        sourceUrl: fields.url({
+          label: 'Source URL',
+          description: 'Original Genspark / Manus / external URL',
+          validation: { isRequired: false },
+        }),
+        shareUrl: fields.url({
+          label: 'Share URL',
+          description: 'Public share link (e.g. Genspark share URL)',
+          validation: { isRequired: false },
+        }),
         content: fields.document({
           label: 'Content',
           formatting: true,
