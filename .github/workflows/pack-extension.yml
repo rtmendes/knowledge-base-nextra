@@ -33,9 +33,10 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "📦 Packing extension v$VERSION"
 
-      # ── 4. Install crx3 packer ─────────────────────────────────────────────
-      - name: Install crx3 packer
-        run: npm install -g crx3
+      # ── 4. Install crx3 library ────────────────────────────────────────────
+      #  Installing locally (not -g) so the scripts/pack-crx.js require() finds it.
+      - name: Install crx3 library
+        run: npm install crx3
 
       # ── 5. Write signing key (safe: secret never touches run: directly) ─────
       #
@@ -60,12 +61,13 @@ jobs:
             echo "⚠️  See README: one-time setup → add EXTENSION_KEY_B64 secret"
           fi
 
-      # ── 6. Pack the .crx ───────────────────────────────────────────────────
+      # ── 6. Pack the .crx via library API (more stable than CLI flags) ────────
       - name: Pack extension
-        run: |
-          mkdir -p public/extension
-          crx3 pack chrome-extension --key /tmp/extension.pem --out public/extension/genspark-kb-extractor.crx
-          echo "✅ CRX packed: $(ls -lh public/extension/genspark-kb-extractor.crx | awk '{print $5}')"
+        run: node scripts/pack-crx.js
+        env:
+          CRX_KEY_PATH: /tmp/extension.pem
+          CRX_OUT_PATH: public/extension/genspark-kb-extractor.crx
+          EXT_DIR: chrome-extension
 
       # ── 7. Write updates.xml (Chrome auto-update manifest) ─────────────────
       #
