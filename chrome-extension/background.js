@@ -5,6 +5,9 @@
  * DOM selectors, features, timing — all remotely controlled.
  * Update the server config and every extension instance picks it up
  * within 5 minutes, with zero reinstall required.
+ *
+ * Pause/resume: extensionPaused flag in chrome.storage.local.
+ * When paused, content.js bails immediately and badge shows ⏸.
  */
 
 const CONFIG_URL = 'https://kb.insightprofit.live/api/extension-config'
@@ -12,11 +15,15 @@ const CONFIG_TTL_MS = 5 * 60 * 1000  // re-fetch config every 5 minutes
 
 let capturedChats = []
 let remoteConfig = null
+let extensionPaused = false
 
 // ── Boot: load stored data + fresh remote config ───────────────────────────
 async function boot () {
-  const stored = await chrome.storage.local.get(['capturedChats', 'remoteConfig', 'configFetchedAt'])
+  const stored = await chrome.storage.local.get([
+    'capturedChats', 'remoteConfig', 'configFetchedAt', 'extensionPaused',
+  ])
   capturedChats = stored.capturedChats || []
+  extensionPaused = stored.extensionPaused || false
 
   const cacheAge = Date.now() - (stored.configFetchedAt || 0)
   if (stored.remoteConfig && cacheAge < CONFIG_TTL_MS) {
@@ -40,11 +47,13 @@ async function fetchRemoteConfig () {
     if (remoteConfig.announcement?.show) {
       chrome.action.setBadgeText({ text: '!' })
       chrome.action.setBadgeBackgroundColor({ color: '#FF5722' })
+      return  // don't override announcement badge immediately
     }
   } catch (err) {
     console.warn('[KB Ext] Config fetch failed, using defaults:', err.message)
     remoteConfig = getDefaultConfig()
   }
+  updateBadge()
 }
 
 function getDefaultConfig () {
@@ -57,16 +66,17 @@ function getDefaultConfig () {
       chatTitle: ['h1'],
       chatInput: ['textarea[placeholder*="Ask" i]', 'textarea'],
       submitButton: ['button[type="submit"]'],
+      shareCloseButton: ['button[aria-label*="close" i]', 'button[aria-label*="dismiss" i]', '[data-testid*="close"]'],
     },
     timing: {
-      pageLoadWait: 2000, shareDialogWait: 1500,
-      afterShareClick: 1500, afterToggleClick: 1000,
+      pageLoadWait: 1500, shareDialogWait: 1000,
+      afterShareClick: 1000, afterToggleClick: 800,
       afterPromptPaste: 500, notificationDuration: 2000,
     },
     features: {
       autoCapture: true, autoShare: true, autoSubmit: false,
       captureSparkPages: true, sendToKB: true, showNotifications: true,
-      batchHistoryExport: true,
+      batchHistoryExport: true, skipAlreadyCaptured: true,
     },
     kb: { importEndpoint: 'https://kb.insightprofit.live/api/import/genspark', enabled: true },
     promptTemplates: [],
@@ -100,6 +110,25 @@ async function handleMessage (req) {
       await fetchRemoteConfig()
       return { config: remoteConfig, version: remoteConfig?.configVersion }
 
+    // Content script checks if a chat was already captured (prevents re-running share dialog)
+    case 'isCaptured': {
+      const already = capturedChats.some(c => c.chatId === req.chatId)
+      return { captured: already }
+    }
+
+    // Popup/user toggles the extension on/off
+    case 'togglePaused': {
+      // If req.paused is explicitly passed, use that; otherwise flip current state
+      extensionPaused = req.paused !== undefined ? req.paused : !extensionPaused
+      await chrome.storage.local.set({ extensionPaused })
+      updateBadge()
+      return { paused: extensionPaused }
+    }
+
+    // Popup reads current paused state
+    case 'getPaused':
+      return { paused: extensionPaused }
+
     // Content script reports a newly visited chat page
     case 'captureChat': {
       const chat = req.data
@@ -123,7 +152,7 @@ async function handleMessage (req) {
     case 'clearChats':
       capturedChats = []
       await chrome.storage.local.set({ capturedChats: [] })
-      chrome.action.setBadgeText({ text: '' })
+      updateBadge()
       return { success: true }
 
     // Bulk export from history page
@@ -164,6 +193,11 @@ async function sendToKB (chat, kb) {
 }
 
 function updateBadge () {
+  if (extensionPaused) {
+    chrome.action.setBadgeText({ text: '⏸' })
+    chrome.action.setBadgeBackgroundColor({ color: '#9E9E9E' })
+    return
+  }
   const n = capturedChats.length
   chrome.action.setBadgeText({ text: n > 0 ? String(n) : '' })
   chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' })

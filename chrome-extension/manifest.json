@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Genspark KB Extractor",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Captures Genspark chats and sends them to kb.insightprofit.live. Config-driven — selectors and features update automatically from the server.",
 
   "update_url": "https://kb.insightprofit.live/extension/updates.xml",

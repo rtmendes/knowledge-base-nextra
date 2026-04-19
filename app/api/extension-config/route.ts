@@ -21,8 +21,8 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const config = {
     // ── Meta ────────────────────────────────────────────────────────────────
-    configVersion: '1.2.0',
-    updatedAt: '2026-04-15',
+    configVersion: '1.3.0',
+    updatedAt: '2026-04-19',
     extensionMinVersion: '1.0.0',
 
     // ── URL patterns that trigger the extension ─────────────────────────────
@@ -80,6 +80,16 @@ export async function GET() {
         'button[data-testid*="submit"]',
       ],
 
+      // Close/dismiss button inside the share dialog
+      shareCloseButton: [
+        'button[aria-label*="close" i]',
+        'button[aria-label*="dismiss" i]',
+        '[data-testid*="close"]',
+        'button[aria-label*="done" i]',
+        '.modal-close',
+        '[role="dialog"] button:last-child',
+      ],
+
       // History sidebar chat list items
       historyItem: [
         '[data-chat-item]',
@@ -92,10 +102,10 @@ export async function GET() {
 
     // ── Timing (milliseconds) ─────────────────────────────────────────────
     timing: {
-      pageLoadWait: 2000,         // Wait after page load before capturing
-      shareDialogWait: 1500,      // Wait for share button to appear
-      afterShareClick: 1500,      // Wait after clicking share for dialog to open
-      afterToggleClick: 1000,     // Wait after enabling public access
+      pageLoadWait: 1500,         // Wait after page load before capturing
+      shareDialogWait: 1000,      // Wait for share button to appear
+      afterShareClick: 1000,      // Wait after clicking share for dialog to open
+      afterToggleClick: 800,      // Wait after enabling public access
       afterPromptPaste: 500,      // Wait after pasting prompt text
       notificationDuration: 2000, // How long notification stays visible
     },
@@ -111,6 +121,7 @@ export async function GET() {
       showNotifications: true,    // Show in-page toast notifications
       batchHistoryExport: true,   // Enable bulk history export from /me page
       contentExtraction: true,    // Extract page content (not just IDs)
+      skipAlreadyCaptured: true,  // Skip share dialog on already-captured chats
     },
 
     // ── Knowledge Base Integration ────────────────────────────────────────

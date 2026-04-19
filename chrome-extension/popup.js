@@ -16,12 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStats()
   loadConfig()
   loadPromptSettings()
+  loadPauseState()
   setInterval(loadStats, 2500)
 
   document.getElementById('downloadBtn').addEventListener('click', downloadCSV)
   document.getElementById('viewBtn').addEventListener('click', togglePreview)
   document.getElementById('clearBtn').addEventListener('click', clearData)
   document.getElementById('configBadge').addEventListener('click', refreshConfig)
+  document.getElementById('pauseBtn').addEventListener('click', togglePause)
 
   document.getElementById('autoSubmitToggle').addEventListener('change', savePromptSettings)
   let promptTimeout
@@ -33,6 +35,41 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCollapsible('templatesHeader', 'templatesBody')
   setupCollapsible('autoSubmitHeader', 'autoSubmitBody')
 })
+
+// ── Pause / Resume ────────────────────────────────────────────
+
+function loadPauseState () {
+  chrome.runtime.sendMessage({ action: 'getPaused' }, (res) => {
+    applyPauseState(res?.paused || false)
+  })
+}
+
+function togglePause () {
+  const btn = document.getElementById('pauseBtn')
+  const isPaused = btn.classList.contains('btn-resume')  // if btn says Resume, currently paused
+  chrome.runtime.sendMessage({ action: 'togglePaused', paused: !isPaused }, (res) => {
+    applyPauseState(res?.paused || false)
+    showStatus(res?.paused ? '⏸ Extension paused — no new captures' : '▶ Extension resumed', res?.paused ? 'info' : 'success')
+  })
+}
+
+function applyPauseState (paused) {
+  const bar = document.getElementById('pauseBar')
+  const btn = document.getElementById('pauseBtn')
+  const label = document.getElementById('pauseLabel')
+
+  if (paused) {
+    bar.className = 'pause-bar paused'
+    btn.className = 'pause-btn btn-resume'
+    btn.textContent = '▶ Resume'
+    label.textContent = 'Paused — not capturing'
+  } else {
+    bar.className = 'pause-bar active'
+    btn.className = 'pause-btn btn-pause'
+    btn.textContent = '⏸ Pause'
+    label.textContent = 'Active — capturing chats'
+  }
+}
 
 // ── Stats ─────────────────────────────────────────────────────
 

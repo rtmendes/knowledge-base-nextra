@@ -125,6 +125,51 @@ def get_vercel_deployments():
     return [{"name": d.get("name"), "state": d.get("state"),
              "url": d.get("url"), "created": d.get("createdAt")} for d in deployments]
 
+# ── Extension status (Genspark KB Extractor) ─────────────────────────────────
+def get_extension_status():
+    """
+    Fetches live extension metrics from kb.insightprofit.live:
+      - Current remote config version (indicates if config was recently updated)
+      - Capture count from the import endpoint summary (if available)
+    Falls back gracefully if endpoints are unavailable.
+    """
+    status = {
+        "config_version": "unknown",
+        "config_updated_at": "unknown",
+        "capture_endpoint": "https://kb.insightprofit.live/api/import/genspark",
+        "config_endpoint": "https://kb.insightprofit.live/api/extension-config",
+        "note": "",
+    }
+    try:
+        r = requests.get(
+            "https://kb.insightprofit.live/api/extension-config",
+            timeout=10,
+        )
+        if r.ok:
+            cfg = r.json()
+            status["config_version"] = cfg.get("configVersion", "unknown")
+            status["config_updated_at"] = cfg.get("updatedAt", "unknown")
+            features = cfg.get("features", {})
+            status["auto_share_enabled"] = features.get("autoShare", False)
+            status["skip_already_captured"] = features.get("skipAlreadyCaptured", False)
+            status["timing_page_load_ms"] = cfg.get("timing", {}).get("pageLoadWait", "?")
+    except Exception as e:
+        status["note"] = f"Config fetch failed: {e}"
+
+    # Optional: fetch capture summary from KB API
+    try:
+        r2 = requests.get(
+            "https://kb.insightprofit.live/api/import/genspark",
+            timeout=10,
+        )
+        if r2.ok:
+            data = r2.json()
+            status["total_captured"] = data.get("total", data.get("count", "unknown"))
+    except Exception:
+        pass  # summary endpoint may not be implemented yet
+
+    return status
+
 # ── Neon ──────────────────────────────────────────────────────────────────────
 def get_neon_projects():
     if not NEON_API_KEY:
@@ -161,7 +206,7 @@ def detect_paused_without_tracking(tasks):
             and t["status"].lower() in {"to do", "open", "not started", "on hold", "paused"}]
 
 # ── Groq synthesis ────────────────────────────────────────────────────────────
-def synthesize_briefing(tasks, gh_runs, vercel, neon, blockers, stalled, paused):
+def synthesize_briefing(tasks, gh_runs, vercel, neon, blockers, stalled, paused, ext_status=None):
     payload = {
         "date": str(TODAY), "day_of_week": TODAY.strftime("%A"),
         "briefing_type": BRIEFING_TYPE, "goal": "$250,000 profit",
@@ -175,6 +220,7 @@ def synthesize_briefing(tasks, gh_runs, vercel, neon, blockers, stalled, paused)
             "active_builds": [t for t in tasks if t["list"] == "Active Build"][:10],
         },
         "github_runs": gh_runs[:8], "vercel": vercel[:8], "neon_projects": neon,
+        "extension_status": ext_status or {},
     }
 
     system_prompt = (
@@ -189,6 +235,9 @@ def synthesize_briefing(tasks, gh_runs, vercel, neon, blockers, stalled, paused)
         "## PROJECT STATUS\n(One line per project: On Track / At Risk / Blocked + reason.)\n\n"
         "## REVENUE PIPELINE\n(Status toward $250k goal. Flag anything off-track.)\n\n"
         "## SYSTEM HEALTH\n(GitHub Actions pass/fail, Vercel deployments, Neon DB.)\n\n"
+        "## EXTENSION STATUS\n"
+        "(Genspark KB Extractor: config version, auto-share state, capture count if available. "
+        "Flag if config is stale (>3 days old) or if auto-share is disabled unexpectedly.)\n\n"
         "## ACTION ITEMS FOR CLICKUP\n(Tasks to create or move. Format: [LIST] Task name)\n\n"
         + ("## WEEKLY PLAN\n(Cross-project next steps for all 8 projects this week.)\n\n"
            if BRIEFING_TYPE == "weekly" else "")
@@ -304,11 +353,13 @@ def main():
     print(f"{'='*60}\n")
 
     print("Collecting data...")
-    tasks   = get_all_clickup_tasks()
-    gh_runs = get_github_workflow_runs()
-    vercel  = get_vercel_deployments()
-    neon    = get_neon_projects()
+    tasks      = get_all_clickup_tasks()
+    gh_runs    = get_github_workflow_runs()
+    vercel     = get_vercel_deployments()
+    neon       = get_neon_projects()
+    ext_status = get_extension_status()
     print(f"  Total ClickUp tasks: {len(tasks)} | GH runs: {len(gh_runs)} | Vercel: {len(vercel)} | Neon: {len(neon)}")
+    print(f"  Extension config: v{ext_status.get('config_version','?')} (updated {ext_status.get('config_updated_at','?')})")
 
     print("\nAnalyzing...")
     blockers = detect_blockers(tasks)
@@ -317,7 +368,7 @@ def main():
     print(f"  Blockers: {len(blockers)} | Stalled: {len(stalled)} | Paused no-track: {len(paused)}")
 
     print("\nSynthesizing with Groq llama-3.3-70b-versatile...")
-    briefing = synthesize_briefing(tasks, gh_runs, vercel, neon, blockers, stalled, paused)
+    briefing = synthesize_briefing(tasks, gh_runs, vercel, neon, blockers, stalled, paused, ext_status)
     print("\n" + "="*60)
     print(briefing)
     print("="*60 + "\n")
