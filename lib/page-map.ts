@@ -16,6 +16,7 @@ export type NavItem = {
  */
 export async function getNavTree(): Promise<NavItem[]> {
   const allDocs = await reader.collections.docs.all()
+  console.log(`[keystatic] getNavTree: reader returned ${allDocs.length} docs`)
 
   const rootPages: NavItem[] = []
   const folders: Record<string, { index?: NavItem; children: NavItem[] }> = {}
