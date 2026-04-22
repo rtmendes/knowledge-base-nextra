@@ -13,6 +13,45 @@ interface Props {
   params: Promise<{ id: string }>
 }
 
+/** Render plain text with smart paragraph splitting. */
+function PlainTextRenderer({ text }: { text: string }) {
+  // If the text has natural newlines, respect them
+  const hasNaturalBreaks = (text.match(/\n/g) || []).length > 5
+  if (hasNaturalBreaks) {
+    const paragraphs = text.split(/\n{2,}/)
+    return (
+      <div className="space-y-4">
+        {paragraphs.map((p, i) => (
+          <p key={i} className="text-gray-700 dark:text-gray-300 leading-7 whitespace-pre-wrap">
+            {p.trim()}
+          </p>
+        ))}
+      </div>
+    )
+  }
+  // Otherwise, break long unformatted text at sentence boundaries
+  const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z])/)
+  const paragraphs: string[] = []
+  let current: string[] = []
+  for (const s of sentences) {
+    current.push(s)
+    if (current.join(' ').length > 600) {
+      paragraphs.push(current.join(' '))
+      current = []
+    }
+  }
+  if (current.length) paragraphs.push(current.join(' '))
+  return (
+    <div className="space-y-4">
+      {paragraphs.map((p, i) => (
+        <p key={i} className="text-gray-700 dark:text-gray-300 leading-7">
+          {p.trim()}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 async function getCategoryById(id: string) {
   if (!supabaseAdmin) return null
   const { data } = await supabaseAdmin
@@ -203,9 +242,7 @@ async function ItemContent({ params }: Props) {
         </article>
       ) : item.content_plain ? (
         <article className="prose prose-gray dark:prose-invert max-w-none pb-8">
-          <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 leading-7">
-            {item.content_plain}
-          </div>
+          <PlainTextRenderer text={item.content_plain} />
         </article>
       ) : (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-8 text-center mb-8">
