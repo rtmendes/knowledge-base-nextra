@@ -1,5 +1,10 @@
 import Link from 'next/link'
 import { getNavTree, type NavItem } from '../lib/page-map'
+import { getCategories, getTotalStats } from '../lib/supabase-kb'
+import { CategoryCard } from '../components/kb/CategoryCard'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 const MAIN_SECTIONS = [
   {
@@ -72,11 +77,16 @@ function DocCard({ item }: { item: NavItem }) {
 }
 
 export default async function HomePage() {
+  // Load KB categories from Supabase
+  const [categories, stats] = await Promise.all([
+    getCategories(),
+    getTotalStats(),
+  ])
+
   // Load any additional Keystatic docs (graceful fallback to empty)
   let extraNavItems: NavItem[] = []
   try {
     const all = await getNavTree()
-    // Exclude the two main sections already shown above
     extraNavItems = all.filter(
       (item) => item.name !== 'genspark' && item.name !== 'ai-research'
     )
@@ -84,8 +94,13 @@ export default async function HomePage() {
     /* content not yet populated or reader error */
   }
 
+  const topCategories = categories
+    .filter(c => c.item_count > 0)
+    .sort((a, b) => b.item_count - a.item_count)
+    .slice(0, 8)
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
+    <div className="max-w-5xl mx-auto px-4 py-10">
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <div className="mb-10 text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-sm font-medium text-amber-700 dark:text-amber-400 mb-4">
@@ -95,11 +110,55 @@ export default async function HomePage() {
           Everything, Organized
         </h1>
         <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-          AI research, project archives, SOPs, and documentation for the InsightProfit ecosystem.
+          {stats.totalItems.toLocaleString()} knowledge items across {stats.totalCategories} categories — AI research, SOPs, products, and more.
         </p>
       </div>
 
+      {/* ── KB Browse Banner ────────────────────────────────────────── */}
+      <Link
+        href="/kb"
+        className="group block mb-10 relative overflow-hidden rounded-2xl border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-br from-amber-50 via-white to-amber-50/50 dark:from-amber-900/10 dark:via-gray-800/40 dark:to-amber-900/5 p-6 hover:shadow-lg hover:border-amber-400 dark:hover:border-amber-500/40 transition-all duration-300"
+      >
+        <div className="absolute top-0 right-0 w-40 h-40 bg-amber-400/5 rounded-full -mr-10 -mt-10 group-hover:bg-amber-400/10 transition-colors" />
+        <div className="relative flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">🗂️</span>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
+                Browse Full Knowledge Base
+              </h2>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 ml-12">
+              {stats.totalItems.toLocaleString()} items · {stats.totalCategories} categories · {stats.totalWithContent.toLocaleString()} with full content
+            </p>
+          </div>
+          <span className="text-amber-500 dark:text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
+            →
+          </span>
+        </div>
+      </Link>
+
+      {/* ── Top Categories ──────────────────────────────────────────── */}
+      <div className="mb-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+            Top Categories
+          </h2>
+          <Link href="/kb" className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline">
+            View all {stats.totalCategories} →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {topCategories.map(cat => (
+            <CategoryCard key={cat.id} category={cat} />
+          ))}
+        </div>
+      </div>
+
       {/* ── Main section cards (always visible) ─────────────────────── */}
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-4">
+        AI Research Archives
+      </h2>
       <div className="grid gap-5 sm:grid-cols-2 mb-10">
         {MAIN_SECTIONS.map((section) => (
           <Link
@@ -170,6 +229,12 @@ export default async function HomePage() {
       {/* ── Quick actions ─────────────────────────────────────────── */}
       <div className="flex flex-wrap justify-center gap-3 mb-10">
         <Link
+          href="/kb"
+          className="inline-flex items-center gap-2 rounded-lg border border-amber-400 dark:border-amber-500/60 bg-amber-50 dark:bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
+        >
+          🔍 Search Knowledge Base
+        </Link>
+        <Link
           href="/keystatic"
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-amber-400 dark:hover:border-amber-500/60 transition-colors"
         >
@@ -187,9 +252,9 @@ export default async function HomePage() {
       <div className="rounded-xl border border-amber-200/50 dark:border-amber-500/20 bg-amber-50/60 dark:bg-amber-500/5 p-5">
         <div className="flex flex-wrap items-center justify-center gap-8 text-sm">
           {[
-            { value: '100', label: 'Genspark projects' },
-            { value: '81', label: 'Manus projects' },
-            { value: '624K', label: 'AI credits used' },
+            { value: stats.totalItems.toLocaleString(), label: 'Knowledge items' },
+            { value: stats.totalCategories.toString(), label: 'Categories' },
+            { value: stats.totalWithContent.toLocaleString(), label: 'With content' },
           ].map((stat, i) => (
             <div key={stat.label} className="flex items-center gap-8">
               {i > 0 && (

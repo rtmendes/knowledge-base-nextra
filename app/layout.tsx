@@ -20,6 +20,12 @@ const STATIC_PAGE_MAP: any[] = [
   },
   {
     kind: 'MdxPage',
+    name: 'kb',
+    route: '/kb',
+    frontMatter: { title: '📚 Knowledge Base' },
+  },
+  {
+    kind: 'MdxPage',
     name: 'genspark',
     route: '/genspark',
     frontMatter: { title: '⚡ Genspark Projects' },
@@ -52,7 +58,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       (item: any) =>
         item.name !== 'index' &&
         item.name !== 'genspark' &&
-        item.name !== 'ai-research'
+        item.name !== 'ai-research' &&
+        item.name !== 'kb'
     )
     if (dynamic.length > 0) {
       pageMap = [...STATIC_PAGE_MAP, ...dynamic]
@@ -92,6 +99,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               }}
             >
               <span>© 2026 Insight Profit. All rights reserved.</span>
+              <a
+                href="/kb"
+                style={{ color: '#6b7280', textDecoration: 'none' }}
+              >
+                📚 Knowledge Base
+              </a>
               <a
                 href="/keystatic"
                 style={{ color: '#6b7280', textDecoration: 'none' }}
