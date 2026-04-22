@@ -1,5 +1,6 @@
 import { Layout, Navbar } from 'nextra-theme-docs'
 import 'nextra-theme-docs/style.css'
+import './globals.css'
 import type { ReactNode } from 'react'
 import { getNavTree, navTreeToPageMap } from '../lib/page-map'
 import { ChatWidget } from '../components/ChatWidget'
@@ -41,7 +42,7 @@ const STATIC_PAGE_MAP: any[] = [
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Try to load additional Keystatic docs and merge them into the sidebar.
-  // If Keystatic reader fails (no content yet, or GitHub storage issues in prod),
+  // If Keystatic reader fails (no content yet, or reader error),
   // we still show the hardcoded pages above.
   let pageMap: any[] = STATIC_PAGE_MAP
 
