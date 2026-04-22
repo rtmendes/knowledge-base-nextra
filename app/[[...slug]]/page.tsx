@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { reader } from '../../lib/keystatic'
+import { sanitizeDocument } from '../../lib/sanitize-document'
 import { DocRenderer } from '../../components/DocRenderer'
 import { ShareBar } from '../../components/ShareBar'
 
@@ -9,8 +10,6 @@ interface Props {
 
 export async function generateStaticParams() {
   try {
-    // Use list() first — it returns slugs without full validation,
-    // so a single file with extra frontmatter keys won't break ALL pages.
     const slugs = await reader.collections.docs.list()
     console.log(`[keystatic] generateStaticParams: found ${slugs.length} doc slugs`)
     return slugs.map((slug) => ({
@@ -52,7 +51,28 @@ export default async function DocPage({ params }: Props) {
 
   if (!doc) notFound()
 
-  const content = await doc.content()
+  let content
+  try {
+    const rawContent = await doc.content()
+    content = sanitizeDocument(rawContent)
+  } catch (err) {
+    console.error(`[keystatic] Failed to parse content for "${docSlug}":`, err)
+    return (
+      <article className="prose prose-gray dark:prose-invert max-w-none">
+        <div className="mb-8 border-b border-gray-200 dark:border-gray-700 pb-6">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100 mb-2">
+            {doc.title}
+          </h1>
+        </div>
+        <div className="rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-5">
+          <p className="text-gray-600 dark:text-gray-400">
+            ⚠️ This page&apos;s content could not be rendered. Try viewing the{' '}
+            <a href={doc.sourceUrl ?? '#'} className="text-blue-600 underline">original source</a>.
+          </p>
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article className="prose prose-gray dark:prose-invert max-w-none">
