@@ -1,0 +1,74 @@
+---
+title: Dispatch Routing Configuration
+description: >-
+  Maps task intent to service endpoints for the Dispatch AI orchestrator.
+  Documents all active routes, services, and infrastructure endpoints.
+status: active
+category: Operations
+order: 25
+tags:
+  - infrastructure
+  - routing
+  - dispatch
+  - services
+  - configuration
+---
+
+# Dispatch Routing Configuration
+
+Maps task intent → service endpoint for the Dispatch AI orchestrator. The config file lives at the repo root as `routing-config.yml`.
+
+## Route Summary
+
+| Route Key | Triggers | Service | Endpoint | Status |
+|---|---|---|---|---|
+| `ai_research` | research, summarize, explain, what is | PopeBot | `thepopebot-production-e881.up.railway.app` | ✅ Confirmed |
+| `publication_writing` | write an article, draft a post, pitch, blog | Elite Writer | TBD | ⚠️ URL unknown |
+| `ai_platform` | polsia, AI API, model endpoint | Polsia | `polsia-production.up.railway.app` | ✅ Confirmed |
+| `task_management` | add task, create task, blocked | ClickUp MCP | `mcp://clickup` | ✅ Active |
+| `knowledge_base` | add to KB, knowledge base, ingest | Nextra + Neon | `knowledge-base-nextra.vercel.app` | ⚠️ Unverified |
+| `code_deploy` | push to github, deploy, fix the build | GitHub + Vercel | `mcp://github + mcp://vercel` | ✅ Active |
+| `command_center` | dashboard, mission control, project status | Command Center | `command.insightprofit.live` | ✅ Active |
+| `marketing_funnels` | funnel, checkout, GHL, order form | Go High Level | `mcp://ghl` | ✅ Active |
+| `ecommerce` | shopify, family gift studio, FGS, POD | Family Gift Studio | TBD (Shopify URL) | ⚠️ TBD |
+| `video_content` | video, vidrevamp, youtube, viral hook | VidRevamp | `vidrevamp.vercel.app` | ⚠️ Unverified |
+| `aviation` | aviation, pilot, FAA, cargo, propel | Notion KB | `mcp://notion` | ✅ Active |
+| `daily_briefing` | morning briefing, what\'s happening, daily brief | Chief of Staff | GitHub Actions dispatch | ✅ Active |
+
+## Infrastructure
+
+### Railway Services (Confirmed)
+
+```
+PopeBot:  https://thepopebot-production-e881.up.railway.app
+Polsia:   https://polsia-production.up.railway.app
+```
+
+### Vercel Projects
+
+```
+knowledge-base-nextra  → https://knowledge-base-nextra.vercel.app
+polsia-api             → https://polsia-api.vercel.app
+vidrevamp              → https://vidrevamp.vercel.app (inferred)
+elite-writer           → TBD (app confirmed, URL unknown)
+```
+
+### Custom Domains (Active)
+
+```
+command.insightprofit.live   → Command Center
+supabase.insightprofit.live  → Self-hosted Supabase (Elite Writer backend)
+```
+
+## Action Items
+
+- [ ] Authenticate Vercel MCP (connect in Cowork settings) to confirm all Vercel project URLs
+- [ ] Confirm Family Gift Studio Shopify storefront URL and update `ecommerce` route
+- [ ] Locate Elite Writer production frontend URL and update `publication_writing` route
+- [ ] Add `routing-config.yml` to the Chief of Staff workflow so it auto-loads on morning briefing
+
+## Configuration File
+
+The full annotated YAML config is at the repo root: [`routing-config.yml`](https://github.com/rtmendes/knowledge-base-nextra/blob/main/routing-config.yml)
+
+To update routes, edit the YAML file directly and commit. The Dispatch orchestrator reads this file at startup.
