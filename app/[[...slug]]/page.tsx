@@ -9,13 +9,12 @@ interface Props {
 
 export async function generateStaticParams() {
   try {
-    const docs = await reader.collections.docs.all()
-    console.log(`[keystatic] generateStaticParams: found ${docs.length} docs`)
-    if (docs.length === 0) {
-      console.warn('[keystatic] generateStaticParams: reader returned 0 docs — check content/docs/ files')
-    }
-    return docs.map((doc) => ({
-      slug: doc.slug === 'index' ? [] : doc.slug.split('/'),
+    // Use list() first — it returns slugs without full validation,
+    // so a single file with extra frontmatter keys won't break ALL pages.
+    const slugs = await reader.collections.docs.list()
+    console.log(`[keystatic] generateStaticParams: found ${slugs.length} doc slugs`)
+    return slugs.map((slug) => ({
+      slug: slug === 'index' ? [] : slug.split('/'),
     }))
   } catch (err) {
     console.error('[keystatic] generateStaticParams FAILED:', err)
