@@ -131,6 +131,32 @@
   }
 }
 
+/* ── KB Page Overrides (fight Nextra specificity) ─────────────── */
+
+/* Force heading colors in KB pages — Nextra theme sets its own heading colors */
+.kb-page-wrapper h1,
+.kb-page-wrapper h2,
+.kb-page-wrapper h3,
+.kb-page-wrapper h4 {
+  color: inherit;
+}
+
+:is(html[class~="dark"]) .kb-page-wrapper h1 {
+  color: rgb(249 250 251) !important;   /* gray-50 */
+}
+
+:is(html[class~="dark"]) .kb-page-wrapper h2 {
+  color: rgb(249 250 251) !important;   /* gray-50 */
+}
+
+:is(html[class~="dark"]) .kb-page-wrapper h3 {
+  color: rgb(243 244 246) !important;   /* gray-100 */
+}
+
+.kb-page-wrapper h1 {
+  color: rgb(17 24 39) !important;   /* gray-900 */
+}
+
 /* ── KB Animations ────────────────────────────────────────────── */
 
 @keyframes kb-fade-in {
