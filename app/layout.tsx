@@ -1,5 +1,4 @@
 import { Layout, Navbar } from 'nextra-theme-docs'
-import 'nextra-theme-docs/style.css'
 import './globals.css'
 import type { ReactNode } from 'react'
 import { getNavTree, navTreeToPageMap } from '../lib/page-map'
