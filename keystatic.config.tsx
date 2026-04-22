@@ -67,6 +67,27 @@ export default config({
           description: 'Public share link (e.g. Genspark share URL)',
           validation: { isRequired: false },
         }),
+        // ── Imported metadata (used by auto-imported content) ──────────
+        source: fields.text({
+          label: 'Source Platform',
+          description: 'Where this content was originally created (e.g. Claude, ChatGPT)',
+          validation: { isRequired: false },
+        }),
+        importedAt: fields.text({
+          label: 'Import Date (ISO)',
+          description: 'When this content was imported into the KB',
+          validation: { isRequired: false },
+        }),
+        sessionDate: fields.text({
+          label: 'Session Date (ISO)',
+          description: 'Original session/conversation date',
+          validation: { isRequired: false },
+        }),
+        messageCount: fields.integer({
+          label: 'Message Count',
+          description: 'Number of messages in the original conversation',
+          validation: { isRequired: false },
+        }),
         content: fields.document({
           label: 'Content',
           formatting: true,
