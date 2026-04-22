@@ -1,12 +1,4 @@
 {
-  "framework": "nextjs",
-  "github": {
-    "silent": false
-  },
-  "crons": [
-    {
-      "path": "/api/auto-deploy",
-      "schedule": "*/30 * * * *"
-    }
-  ]
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "next build"
 }
