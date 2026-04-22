@@ -3,7 +3,6 @@
   "github": {
     "silent": false
   },
-  "installCommand": "npm install --legacy-peer-deps",
   "crons": [
     {
       "path": "/api/auto-deploy",
