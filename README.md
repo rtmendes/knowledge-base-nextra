@@ -1,45 +1,74 @@
-# 🧠 Knowledge Base Nextra
+# Knowledge Base Nextra
 
-**InsightProfit Knowledge Base — Nextra v4.**
+InsightProfit Knowledge Base — Nextra v4
 
-![Roff](https://img.shields.io/badge/Roff-666666?style=flat-square&logo=roff&logoColor=white) ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square) ![Private](https://img.shields.io/badge/Private-🔒-red?style=flat-square)
+## Tech Stack
 
----
+- Next.js
+- TypeScript
+- Tailwind CSS
+- Supabase
+- Nextra
 
-## 📋 What This Does
+## Project Structure
 
-InsightProfit Knowledge Base — Nextra v4. It organizes information so your team (and your AI agents) can find answers fast.
+```
+├── app/
+│   ├── [[...slug]]
+│   ├── ai-research
+│   ├── api
+│   ├── genspark
+│   ├── globals.css
+│   ├── import
+│   └── ... (3 more)
+├── chrome-extension/
+├── components/
+│   ├── ChatWidget.tsx
+│   ├── DocRenderer.tsx
+│   ├── IframeApp.tsx
+│   ├── ShareBar.tsx
+│   └── blocks
+├── content/
+├── lib/
+│   ├── keystatic.ts
+│   ├── page-map.ts
+│   └── supabase.ts
+├── public/
+└── scripts/
+```
 
-## 🛠️ Tech Stack
+## Getting Started
 
-| Technology | Role |
-|:---|:---|
-| **Roff/Markdown** | Language |
+### Prerequisites
 
-## ✨ Key Features
+- [Node.js](https://nodejs.org/) ≥ 18
 
-- 🔍 **Smart Search** — Find any document or article instantly
-- 🏷️ **Auto-Categorization** — Content gets tagged and organized automatically
-- 🔗 **Cross-References** — See how topics connect across your knowledge
-- 📱 **Mobile Friendly** — Works great on phones, tablets, and desktops
-- 🔒 **Secure by Default** — Built with security best practices
-- ⚙️ **Easy Configuration** — Get up and running in minutes
-
-## 🚀 Getting Started
+### Installation
 
 ```bash
 git clone https://github.com/rtmendes/knowledge-base-nextra.git
 cd knowledge-base-nextra
-# Open index.html in your browser or deploy to your hosting provider
+npm install
 ```
 
-## 🔗 Related Projects
+Copy the example environment file and fill in the required values:
 
-- [`insightprofit-kb`](https://github.com/rtmendes/insightprofit-kb)
-- [`documentationai-knowledge-base`](https://github.com/rtmendes/documentationai-knowledge-base)
-- [`ai-knowledge-base`](https://github.com/rtmendes/ai-knowledge-base)
-- [`insight-profit-kb`](https://github.com/rtmendes/insight-profit-kb)
+```bash
+cp .env.example .env
+```
 
----
+### Development
 
-*Part of the [Knowledge Base](https://github.com/rtmendes) ecosystem by [@rtmendes](https://github.com/rtmendes).*
+```bash
+npm run dev
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+## Deployment
+
+This project is configured for deployment on [Vercel](https://vercel.com).
