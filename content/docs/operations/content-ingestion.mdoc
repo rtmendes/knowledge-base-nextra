@@ -1,0 +1,170 @@
+---
+title: Content Ingestion Pipeline Runbook
+description: >-
+  Step-by-step runbook for the 20TB content processing pipeline — batch
+  processing video, audio, PDFs, and documents from external drives into Neon
+  Postgres.
+status: active
+category: Operations
+order: 20
+tags:
+  - operations
+  - pipeline
+  - content-processing
+  - neon
+  - runbook
+---
+
+# Content Ingestion Pipeline Runbook
+
+This runbook documents the 20TB content processing pipeline — how to batch process video, audio, PDFs, and docs from the external drive into Neon Postgres.
+
+## Overview
+
+The pipeline ingests content from external storage across 5 brands, processes each file type appropriately, and stores structured metadata and extracted text in the Neon Postgres database.
+
+**Infrastructure:**
+- **Database:** Neon Postgres project `dark-heart-11924323`
+- **Schema:** `command_center.content_items`, `content_products`, `processing_queue`
+- **Repo:** `rtmendes/content-processor` (processing scripts and workers)
+- **Storage:** External drive (20TB across 5 brands)
+
+## Supported File Types
+
+| File Type | Extensions | Processing Method | Avg Time per File |
+|-----------|-----------|-------------------|-------------------|
+| Video | `.mp4`, `.mov`, `.avi`, `.mkv` | FFmpeg → transcript extraction → metadata | 2-5 min |
+| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg` | Whisper transcription → text extraction | 1-3 min |
+| PDF | `.pdf` | PyPDF2/pdfplumber → text extraction + OCR fallback | 10-30 sec |
+| Documents | `.docx`, `.doc`, `.txt`, `.rtf` | python-docx / direct read → text extraction | 5-15 sec |
+| Spreadsheets | `.xlsx`, `.csv` | pandas → structured data extraction | 5-20 sec |
+| Images | `.jpg`, `.png`, `.webp` | OCR (Tesseract) → alt-text generation | 15-45 sec |
+
+## Step-by-Step Batch Processing Workflow
+
+### 1. Prepare the Processing Queue
+
+```sql
+-- Check current queue status
+SELECT status, COUNT(*) 
+FROM command_center.processing_queue 
+GROUP BY status;
+
+-- Add new batch from external drive scan
+INSERT INTO command_center.processing_queue (file_path, file_type, brand, status, created_at)
+SELECT file_path, file_type, brand, 'pending', NOW()
+FROM command_center.content_items
+WHERE processed = false AND file_size > 0;
+```
+
+### 2. Start the Batch Processor
+
+```bash
+# Clone/pull the processor repo
+git clone https://github.com/rtmendes/content-processor.git
+cd content-processor
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run batch processing (default: 10 concurrent workers)
+python batch_processor.py --brand "all" --workers 10 --batch-size 500
+
+# Or process a specific brand
+python batch_processor.py --brand "insightprofit" --workers 5
+```
+
+### 3. Monitor Progress
+
+```sql
+-- Real-time progress check
+SELECT 
+  brand,
+  status,
+  COUNT(*) as count,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY brand), 1) as pct
+FROM command_center.processing_queue
+GROUP BY brand, status
+ORDER BY brand, status;
+```
+
+### 4. Verify Completion
+
+```sql
+-- Check for any failed items
+SELECT file_path, error_message, retry_count
+FROM command_center.processing_queue
+WHERE status = 'failed'
+ORDER BY updated_at DESC
+LIMIT 50;
+
+-- Summary stats
+SELECT 
+  brand,
+  COUNT(*) FILTER (WHERE status = 'completed') as completed,
+  COUNT(*) FILTER (WHERE status = 'failed') as failed,
+  COUNT(*) FILTER (WHERE status = 'pending') as pending
+FROM command_center.processing_queue
+GROUP BY brand;
+```
+
+## Failure Handling and Recovery
+
+### Retry Failed Items
+
+```sql
+-- Reset failed items for retry (max 3 retries)
+UPDATE command_center.processing_queue
+SET status = 'pending', retry_count = retry_count + 1, error_message = NULL
+WHERE status = 'failed' AND retry_count < 3;
+```
+
+### Common Failures
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `FileNotFoundError` | External drive disconnected | Reconnect drive, verify mount point |
+| `OutOfMemoryError` | Large video file | Reduce `--workers` to 2-3, increase swap |
+| `TranscriptionTimeout` | Audio > 2 hours | Split file with `ffmpeg -ss` before processing |
+| `OCRError` | Corrupted or DRM-protected PDF | Skip file, log for manual review |
+| `ConnectionError` | Neon connection pool exhausted | Reduce workers, check Neon dashboard |
+
+### Nuclear Reset (use sparingly)
+
+```sql
+-- Reset ALL failed items
+UPDATE command_center.processing_queue
+SET status = 'pending', retry_count = 0, error_message = NULL
+WHERE status = 'failed';
+
+-- Clear and rebuild queue for a specific brand
+DELETE FROM command_center.processing_queue WHERE brand = 'insightprofit';
+-- Then re-run step 1
+```
+
+## Batch Processing Strategy for 20TB Across 5 Brands
+
+| Phase | Brands | Est. Files | Est. Time | Priority |
+|-------|--------|-----------|-----------|----------|
+| Phase 1 | InsightProfit | ~50K files | 3-5 days | Highest |
+| Phase 2 | Family Gift Studio | ~30K files | 2-3 days | High |
+| Phase 3 | Aviation/Pilot Career | ~20K files | 1-2 days | Medium |
+| Phase 4 | Polsia AI | ~15K files | 1-2 days | Medium |
+| Phase 5 | Personal/Archive | ~100K+ files | 5-7 days | Low |
+
+**Recommended approach:** Process one brand at a time to avoid overwhelming the Neon connection pool. Run overnight batches with `--workers 10` during off-peak hours.
+
+## Cost Summary
+
+| Service | Monthly Cost | Notes |
+|---------|-------------|-------|
+| Neon Postgres (Pro) | $19/month | 10GB storage, autoscaling compute |
+| Whisper API (if using cloud) | $5-10/month | Only for audio/video transcription |
+| OCR (Tesseract, local) | $0 | Open source, runs locally |
+| **Total** | **~$19-30/month** | After initial processing, drops to ~$5-10/month maintenance |
+
+## Related Resources
+
+- **Content Processor Repo:** `rtmendes/content-processor`
+- **Neon Dashboard:** [console.neon.tech](https://console.neon.tech)
+- **Command Center:** [command.insightprofit.live](https://command.insightprofit.live)

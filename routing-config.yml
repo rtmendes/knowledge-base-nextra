@@ -1,0 +1,159 @@
+# ============================================================================
+# Dispatch Routing Configuration
+# Maps task intent → service endpoint for the Dispatch AI orchestrator
+# Generated: 2026-04-13  |  Updated: 2026-04-22
+# ============================================================================
+
+routes:
+  ai_research:
+    triggers:
+      - research
+      - summarize
+      - explain
+      - "what is"
+    service: PopeBot
+    endpoint: https://thepopebot-production-e881.up.railway.app/api/chat
+    status: confirmed
+    method: POST
+
+  publication_writing:
+    triggers:
+      - "write an article"
+      - "draft a post"
+      - pitch
+      - blog
+    service: Elite Writer
+    endpoint: null  # TBD — locate production frontend URL
+    status: pending
+    method: POST
+
+  ai_platform:
+    triggers:
+      - polsia
+      - "AI API"
+      - "model endpoint"
+    service: Polsia
+    endpoint: https://polsia-production.up.railway.app
+    status: confirmed
+    method: POST
+
+  task_management:
+    triggers:
+      - "add task"
+      - "create task"
+      - blocked
+    service: ClickUp MCP
+    endpoint: mcp://clickup
+    status: active
+    method: MCP
+
+  knowledge_base:
+    triggers:
+      - "add to KB"
+      - "knowledge base"
+      - ingest
+    service: Nextra + Neon
+    endpoint: https://knowledge-base-nextra.vercel.app
+    status: unverified
+    method: POST
+
+  code_deploy:
+    triggers:
+      - "push to github"
+      - deploy
+      - "fix the build"
+    service: GitHub + Vercel
+    endpoint: mcp://github + mcp://vercel
+    status: active
+    method: MCP
+
+  command_center:
+    triggers:
+      - dashboard
+      - "mission control"
+      - "project status"
+    service: Command Center
+    endpoint: https://command.insightprofit.live
+    status: active
+    method: GET
+
+  marketing_funnels:
+    triggers:
+      - funnel
+      - checkout
+      - GHL
+      - "order form"
+    service: Go High Level
+    endpoint: mcp://ghl
+    status: active
+    method: MCP
+
+  ecommerce:
+    triggers:
+      - shopify
+      - "family gift studio"
+      - FGS
+      - POD
+    service: Family Gift Studio
+    endpoint: null  # TBD — Shopify storefront URL
+    status: pending
+    method: POST
+
+  video_content:
+    triggers:
+      - video
+      - vidrevamp
+      - youtube
+      - "viral hook"
+    service: VidRevamp
+    endpoint: https://vidrevamp.vercel.app  # inferred, unverified
+    status: unverified
+    method: POST
+
+  aviation:
+    triggers:
+      - aviation
+      - pilot
+      - FAA
+      - cargo
+      - propel
+    service: Notion KB
+    endpoint: mcp://notion
+    status: active
+    method: MCP
+
+  daily_briefing:
+    triggers:
+      - "morning briefing"
+      - "what\'s happening"
+      - "daily brief"
+    service: Chief of Staff (GitHub Actions)
+    endpoint: /actions/workflows/chief-of-staff.yml/dispatches
+    status: active
+    method: POST
+
+# ============================================================================
+# Infrastructure Reference
+# ============================================================================
+
+railway_services:
+  popebot: https://thepopebot-production-e881.up.railway.app
+  polsia: https://polsia-production.up.railway.app
+
+vercel_projects:
+  knowledge_base_nextra: https://knowledge-base-nextra.vercel.app
+  polsia_api: https://polsia-api.vercel.app
+  vidrevamp: https://vidrevamp.vercel.app  # inferred
+  elite_writer: null  # TBD
+
+custom_domains:
+  command_center: command.insightprofit.live
+  supabase: supabase.insightprofit.live
+
+# ============================================================================
+# Action Items
+# ============================================================================
+# - [ ] Authenticate Vercel MCP to confirm all Vercel project URLs
+# - [ ] Confirm Family Gift Studio Shopify storefront URL
+# - [ ] Locate Elite Writer production frontend URL
+# - [ ] Add routing-config.yml to Chief of Staff workflow auto-load
