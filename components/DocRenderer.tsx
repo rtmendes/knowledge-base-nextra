@@ -84,6 +84,16 @@ export function DocRenderer({ document }: Props) {
               {children}
             </a>
           ),
+          // Inline images — used by imported genspark/claude content
+          image: ({ src, alt, title }: { src: string; alt: string; title?: string }) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt={alt || ''}
+              title={title || undefined}
+              className="inline-block max-h-80 rounded border border-gray-200 dark:border-gray-700"
+            />
+          ),
         },
         block: {
           paragraph: ({ children, textAlign }) => (
