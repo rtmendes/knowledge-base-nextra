@@ -10,10 +10,15 @@ interface Props {
 export async function generateStaticParams() {
   try {
     const docs = await reader.collections.docs.all()
+    console.log(`[keystatic] generateStaticParams: found ${docs.length} docs`)
+    if (docs.length === 0) {
+      console.warn('[keystatic] generateStaticParams: reader returned 0 docs — check content/docs/ files')
+    }
     return docs.map((doc) => ({
       slug: doc.slug === 'index' ? [] : doc.slug.split('/'),
     }))
-  } catch {
+  } catch (err) {
+    console.error('[keystatic] generateStaticParams FAILED:', err)
     return []
   }
 }
@@ -41,7 +46,8 @@ export default async function DocPage({ params }: Props) {
   let doc
   try {
     doc = await reader.collections.docs.read(docSlug)
-  } catch {
+  } catch (err) {
+    console.error(`[keystatic] Failed to read doc "${docSlug}":`, err)
     notFound()
   }
 
