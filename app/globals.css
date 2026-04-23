@@ -254,10 +254,28 @@ html {
 /* ── Print Styles ─────────────────────────────────────────────── */
 
 @media print {
-  .kb-toc { display: none; }
+  /* Hide navigation and interactive elements */
+  .kb-toc, nav, header nav, footer,
+  [class*="ShareDownload"], [class*="KBContentEditor"],
+  button, .nextra-nav-container, .nextra-sidebar-container,
+  .nextra-breadcrumb { display: none !important; }
+
   .kb-chat-message { break-inside: avoid; }
   .kb-code-block { break-inside: avoid; }
   .kb-prose { max-width: 100%; }
+
+  /* Clean page layout for PDF */
+  body { background: white !important; }
+  .kb-page-wrapper { padding: 0 !important; max-width: 100% !important; }
+  .kb-page-wrapper article { padding: 0 !important; }
+  table { break-inside: avoid; }
+  h1, h2, h3 { break-after: avoid; }
+  p, li { orphans: 3; widows: 3; }
+
+  @page {
+    size: letter;
+    margin: 0.75in;
+  }
 }
 
 /* ── KB Animations ────────────────────────────────────────────── */

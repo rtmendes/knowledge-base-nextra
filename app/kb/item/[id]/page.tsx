@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { getItemById, getItemTypeConfig, getCategoryIcon } from '../../../../lib/supabase-kb'
 import { ItemTypeBadge } from '../../../../components/kb/ItemTypeBadge'
 import { KBContentSection } from '../../../../components/kb/KBContentSection'
+import { ShareDownloadBar } from '../../../../components/kb/ShareDownloadBar'
 import { supabaseAdmin } from '../../../../lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -122,7 +123,7 @@ async function ItemContent({ params }: Props) {
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 mb-5">
             {tags.map(tag => (
               <span
                 key={tag}
@@ -133,6 +134,16 @@ async function ItemContent({ params }: Props) {
             ))}
           </div>
         )}
+
+        {/* Share & Download */}
+        <div className="pt-2">
+          <ShareDownloadBar
+            itemId={item.id}
+            title={item.title}
+            content={item.content || item.content_plain || ''}
+            itemType={item.item_type}
+          />
+        </div>
       </header>
 
       {/* ── Use Cases ───────────────────────────────────────────── */}
