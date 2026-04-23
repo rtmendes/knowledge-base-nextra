@@ -247,7 +247,6 @@
   @apply px-4 py-3;
 }
 
-/* Definition lists */
 .kb-html-content dl {
   @apply my-4;
 }
@@ -260,7 +259,6 @@
   @apply ml-6 text-gray-600 dark:text-gray-400 leading-7;
 }
 
-/* Figure/caption */
 .kb-html-content figure {
   @apply my-6;
 }
@@ -269,33 +267,17 @@
   @apply mt-2 text-center text-sm text-gray-500 dark:text-gray-400 italic;
 }
 
-/* Mark/highlight */
 .kb-html-content mark {
   @apply bg-amber-100 dark:bg-amber-800/30 text-amber-900 dark:text-amber-200 px-1 rounded;
 }
 
-/* Keyboard shortcuts */
 .kb-html-content kbd {
   @apply inline-flex items-center rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-600 dark:text-gray-300 shadow-sm;
 }
 
-/* Abbreviations */
 .kb-html-content abbr {
   @apply underline decoration-dotted underline-offset-4 cursor-help;
 }
-
-/* Fix scraped content with div soup */
-.kb-html-content > div > p,
-.kb-html-content > div > ul,
-.kb-html-content > div > ol,
-.kb-html-content > div > h1,
-.kb-html-content > div > h2,
-.kb-html-content > div > h3,
-.kb-html-content > div > h4 {
-  /* Let the parent styles cascade through wrapper divs */
-}
-
-/* ── Print Styles ─────────────────────────────────────────────── */
 
 @media print {
   .kb-toc {
@@ -312,10 +294,5 @@
   .kb-html-content a,
   .kb-md-content a {
     @apply text-blue-800 no-underline;
-  }
-  
-  .kb-html-content a::after {
-    content: " (" attr(href) ")";
-    @apply text-gray-500 text-xs;
   }
 }
