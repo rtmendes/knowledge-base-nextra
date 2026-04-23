@@ -1,6 +1,6 @@
 /* Import nextra theme CSS via postcss-import (resolves @import before Tailwind)
    so @layer base in the theme CSS coexists with @tailwind base */
-@import 'nextra-theme-docs/dist/style.css';
+@import 'nextra-theme-docs/dist/style-prefixed.css';
 
 @tailwind base;
 @tailwind components;
