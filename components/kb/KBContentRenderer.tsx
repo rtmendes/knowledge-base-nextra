@@ -133,7 +133,22 @@ function parseBlocks(text: string): Block[] {
       i++
     }
     if (paraLines.length > 0) {
-      blocks.push({ type: 'paragraph', text: paraLines.join('\n') })
+      const joined = paraLines.join('\n')
+      // If paragraph is very long (wall of text), break at sentence boundaries
+      if (joined.length > 800) {
+        const sentences = joined.split(/(?<=[.!?])\s+(?=[A-Z])/)
+        let current: string[] = []
+        for (const s of sentences) {
+          current.push(s)
+          if (current.join(' ').length > 500) {
+            blocks.push({ type: 'paragraph', text: current.join(' ') })
+            current = []
+          }
+        }
+        if (current.length) blocks.push({ type: 'paragraph', text: current.join(' ') })
+      } else {
+        blocks.push({ type: 'paragraph', text: joined })
+      }
     }
   }
 
