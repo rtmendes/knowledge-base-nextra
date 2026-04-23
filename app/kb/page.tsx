@@ -4,6 +4,7 @@ import { getCategories, getItems, getTotalStats, getItemTypeCounts, getCategoryI
 import { CategoryCard } from '../../components/kb/CategoryCard'
 import { ItemCard } from '../../components/kb/ItemCard'
 import { SearchBar } from '../../components/kb/SearchBar'
+import { SemanticSearchBar } from '../../components/kb/SemanticSearchBar'
 import { TypeFilter } from '../../components/kb/TypeFilter'
 import { Pagination } from '../../components/kb/Pagination'
 
@@ -94,7 +95,7 @@ async function KBContent({ searchParams }: Props) {
       <div className="pb-2">
         <div className="max-w-2xl mb-4">
           <Suspense fallback={<div className="h-12 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />}>
-            <SearchBar basePath="/kb" placeholder="Search across all knowledge items…" />
+            <SemanticSearchBar basePath="/kb" placeholder="AI-powered search across all knowledge items…" />
           </Suspense>
         </div>
 
