@@ -844,3 +844,80 @@ html {
     right: 1rem;
   }
 }
+
+/* ── KB Workspace Layout ──────────────────────────────────────── */
+
+.kb-workspace-layout {
+  /* Prevent nextra's default page layout from adding padding */
+}
+
+/* Sidebar scroll */
+.kb-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+.kb-sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.kb-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kb-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 2px;
+}
+.kb-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* Main content scroll */
+.kb-main-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.2) transparent;
+}
+.kb-main-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.kb-main-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kb-main-scroll::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.2);
+  border-radius: 3px;
+}
+.kb-main-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.4);
+}
+
+/* Fixed ToC container in right panel */
+.fixed-toc-container {
+  position: relative;
+}
+
+/* Make sure the KB workspace takes priority over nextra's default layout */
+.kb-page-wrapper .kb-workspace-layout {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}
+
+/* Override nextra's article max-width inside KB pages */
+.kb-workspace-layout article {
+  max-width: none;
+}
+
+/* ToC link active indicator */
+.kb-toc button[data-active="true"] {
+  position: relative;
+}
+.kb-toc button[data-active="true"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 60%;
+  background: #f59e0b;
+  border-radius: 1px;
+}

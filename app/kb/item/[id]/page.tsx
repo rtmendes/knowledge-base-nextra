@@ -5,6 +5,7 @@ import { getItemById, getItemTypeConfig, getCategoryIcon } from '../../../../lib
 import { ItemTypeBadge } from '../../../../components/kb/ItemTypeBadge'
 import { KBContentSection } from '../../../../components/kb/KBContentSection'
 import { ShareDownloadBar } from '../../../../components/kb/ShareDownloadBar'
+import { ItemPageToC } from '../../../../components/kb/ItemPageToC'
 import { supabaseAdmin } from '../../../../lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -256,6 +257,9 @@ async function ItemContent({ params }: Props) {
           </pre>
         </details>
       )}
+
+      {/* ── Right panel ToC (injected via portal) ───────────────── */}
+      <ItemPageToC content={item.content || ''} />
     </div>
   )
 }
