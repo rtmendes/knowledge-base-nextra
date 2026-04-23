@@ -205,6 +205,55 @@ html {
   .kb-chat-message:nth-child(odd) { animation-delay: 0ms; }
   .kb-chat-message:nth-child(even) { animation-delay: 50ms; }
 
+  /* ── Subscribr Chat Transcript Styles ────────────────────────── */
+
+  .kb-html-content .chat-message {
+    @apply my-6 rounded-xl p-5 border;
+  }
+
+  .kb-html-content .chat-message.user {
+    @apply bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800;
+  }
+
+  .kb-html-content .chat-message.assistant {
+    @apply bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700;
+  }
+
+  .kb-html-content .chat-message strong {
+    @apply text-xs uppercase tracking-wider;
+  }
+
+  .kb-html-content .chat-message.user strong {
+    @apply text-blue-600 dark:text-blue-400;
+  }
+
+  .kb-html-content .chat-message.assistant strong {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+
+  .kb-html-content .chat-message table {
+    @apply my-4 text-xs;
+  }
+
+  .kb-html-content .chat-message table th {
+    @apply bg-white/60 dark:bg-gray-900/40 text-[10px];
+  }
+
+  .kb-html-content .chat-message h1,
+  .kb-html-content .chat-message h2,
+  .kb-html-content .chat-message h3 {
+    @apply mt-4 mb-2;
+  }
+
+  .kb-html-content .chat-message ul,
+  .kb-html-content .chat-message ol {
+    @apply my-2 ml-4;
+  }
+
+  .kb-html-content .chat-message p {
+    @apply my-2;
+  }
+
   /* ── Markdown content layout ─────────────────────────────────── */
 
   .kb-md-content > p {

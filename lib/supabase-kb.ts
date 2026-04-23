@@ -59,6 +59,8 @@ export const ITEM_TYPE_CONFIG: Record<string, { label: string; emoji: string; co
   'brand-guide':    { label: 'Brand Guide',     emoji: '🎨', color: 'text-pink-700 dark:text-pink-300',     bgColor: 'bg-pink-50 dark:bg-pink-900/20 border-pink-200 dark:border-pink-800',         dotColor: 'bg-pink-500' },
   spark:            { label: 'Spark',           emoji: '✨', color: 'text-orange-700 dark:text-orange-300', bgColor: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800', dotColor: 'bg-orange-500' },
   imported:         { label: 'Imported',         emoji: '📥', color: 'text-gray-700 dark:text-gray-300',     bgColor: 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800',         dotColor: 'bg-gray-500' },
+  chat_transcript:  { label: 'Chat',            emoji: '💬', color: 'text-red-700 dark:text-red-300',       bgColor: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',             dotColor: 'bg-red-500' },
+  channel_profile:  { label: 'Channel',         emoji: '📺', color: 'text-red-700 dark:text-red-300',       bgColor: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',             dotColor: 'bg-red-500' },
   launch_plan:      { label: 'Launch Plan',     emoji: '🚀', color: 'text-emerald-700 dark:text-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800', dotColor: 'bg-emerald-500' },
   spreadsheet:      { label: 'Spreadsheet',     emoji: '📊', color: 'text-green-700 dark:text-green-300',   bgColor: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',     dotColor: 'bg-green-500' },
 }
@@ -85,6 +87,7 @@ export const CATEGORY_ICON_MAP: Record<string, string> = {
   'fas fa-home': '🏠', 'fas fa-flask': '🔬', 'fas fa-search': '🔍',
   'fas fa-code': '💻', 'fas fa-server': '🖥️', 'fas fa-video': '🎬',
   'fas fa-heart': '❤️', 'fas fa-play-circle': '▶️',
+  'youtube': '📺', 'fas fa-youtube': '📺',
 }
 
 export function getCategoryIcon(iconClass: string): string {
