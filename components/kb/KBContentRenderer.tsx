@@ -511,7 +511,8 @@ function parseBlocks(text: string): Block[] {
       continue
     }
 
-    // Table
+    // ── Table Detection (standard markdown + loose pipe-delimited) ──────
+    // Standard markdown: | Header | Header | \n |---|---| \n | Cell | Cell |
     if (trimmed.startsWith('|') && trimmed.endsWith('|') && i + 1 < lines.length && /^\|[\s:-]+\|/.test(lines[i + 1]?.trim())) {
       const headers = trimmed.split('|').filter(c => c.trim()).map(c => c.trim())
       i += 2
@@ -522,6 +523,55 @@ function parseBlocks(text: string): Block[] {
       }
       blocks.push({ type: 'table', headers, rows })
       continue
+    }
+
+    // Loose pipe-delimited tables (Genspark style):
+    //   Step | Tool | Actions | Inputs
+    //   1. Do X | Paper | Write it | Data
+    //   2. Do Y | Google | Open it | List
+    // Detect: current line has 2+ pipes AND next 2+ lines also have similar pipe count
+    {
+      const pipeCount = (trimmed.match(/\|/g) || []).length
+      if (pipeCount >= 2 && !trimmed.startsWith('#') && !trimmed.startsWith('>') && !trimmed.startsWith('```')) {
+        // Look ahead: need at least 2 consecutive lines with similar pipe count
+        let tableEnd = i + 1
+        while (tableEnd < lines.length) {
+          const nextTrimmed = lines[tableEnd].trim()
+          if (nextTrimmed === '') break
+          const nextPipes = (nextTrimmed.match(/\|/g) || []).length
+          // Skip separator rows (|---|---|)
+          if (/^[\s|:-]+$/.test(nextTrimmed)) { tableEnd++; continue }
+          // Allow pipe count to vary by ±1 (some rows have merged cells)
+          if (nextPipes < pipeCount - 1 || nextPipes > pipeCount + 1) break
+          tableEnd++
+        }
+        const rowCount = tableEnd - i
+        if (rowCount >= 3) {
+          // First non-separator line = headers, rest = rows
+          let headerIdx = i
+          // Skip separator if it's right after first line
+          const secondLine = lines[i + 1]?.trim() || ''
+          const skipSecond = /^[\s|:-]+$/.test(secondLine)
+          
+          const headerLine = lines[headerIdx].trim()
+          const headers = headerLine.split('|').map(c => c.trim()).filter(c => c.length > 0)
+          
+          const dataStart = skipSecond ? i + 2 : i + 1
+          const rows: string[][] = []
+          for (let r = dataStart; r < tableEnd; r++) {
+            const rowLine = lines[r].trim()
+            if (/^[\s|:-]+$/.test(rowLine)) continue // Skip separator rows
+            const cells = rowLine.split('|').map(c => c.trim()).filter(c => c.length > 0)
+            if (cells.length > 0) rows.push(cells)
+          }
+          
+          if (rows.length >= 2) {
+            blocks.push({ type: 'table', headers, rows })
+            i = tableEnd
+            continue
+          }
+        }
+      }
     }
 
     // Headings
