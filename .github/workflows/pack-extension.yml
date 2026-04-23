@@ -1,4 +1,4 @@
-name: Pack & Host Chrome Extension
+name: "Pack & Host Chrome Extension"
 
 # Triggers: any push to main that touches the extension code, or manual run
 on:
