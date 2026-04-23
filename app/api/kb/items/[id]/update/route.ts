@@ -20,7 +20,39 @@ export async function PUT(
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
     }
 
-    // Strip HTML to get plain text for search indexing
+    // ── Save current content as a version before overwriting ─────────────
+
+    const { data: currentItem } = await supabaseAdmin
+      .from('knowledge_items')
+      .select('content, content_plain, word_count')
+      .eq('id', id)
+      .single()
+
+    if (currentItem && currentItem.content) {
+      // Get latest version number for this item
+      const { data: latestVersion } = await supabaseAdmin
+        .from('knowledge_item_versions')
+        .select('version_number')
+        .eq('item_id', id)
+        .order('version_number', { ascending: false })
+        .limit(1)
+        .single()
+
+      const nextVersion = (latestVersion?.version_number || 0) + 1
+
+      // Save version snapshot
+      await supabaseAdmin.from('knowledge_item_versions').insert({
+        item_id: id,
+        content: currentItem.content,
+        content_plain: currentItem.content_plain,
+        word_count: currentItem.word_count || 0,
+        edited_by: 'user',
+        version_number: nextVersion,
+      })
+    }
+
+    // ── Strip HTML to get plain text for search indexing ─────────────────
+
     const contentPlain = content
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -42,7 +74,6 @@ export async function PUT(
       .replace(/\s+/g, ' ')
       .trim()
 
-    // Count words
     const wordCount = contentPlain
       ? contentPlain.split(/\s+/).filter((w: string) => w.length > 0).length
       : 0
