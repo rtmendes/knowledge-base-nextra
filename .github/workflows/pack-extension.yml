@@ -1,69 +1,59 @@
-name: "Pack & Host Chrome Extension"
+name: "Pack and Host Chrome Extension"
 
-# Triggers: any push to main that touches the extension code, or manual run
+# Triggers: push to main that touches extension code, or manual run
 on:
   push:
     branches: [main]
     paths:
-      - 'chrome-extension/**'             # extension source code changed
-      - 'scripts/pack-crx.js'             # packing script updated
-      - '.github/workflows/pack-extension.yml'  # workflow itself updated
-  workflow_dispatch:                       # manual run from Actions UI
+      - "chrome-extension/**"
+      - "scripts/pack-crx.js"
+      - ".github/workflows/pack-extension.yml"
+  workflow_dispatch:
 
 jobs:
   pack:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to commit packed .crx back to repo
+      contents: write
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
+      # 1. Checkout
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 2. Setup Node (needed for crx3) ────────────────────────────────────
+      # 2. Setup Node
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
-      # ── 3. Read version from manifest.json ─────────────────────────────────
+      # 3. Read version from manifest.json
       - name: Read extension version
         id: version
         run: |
           VERSION=$(python3 -c "import json; print(json.load(open('chrome-extension/manifest.json'))['version'])")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "📦 Packing extension v$VERSION"
+          echo "Packing extension v$VERSION"
 
-      # ── 4. Install crx3 library ────────────────────────────────────────────
-      #  Installing locally (not -g) so the scripts/pack-crx.js require() finds it.
+      # 4. Install crx3 library
       - name: Install crx3 library
         run: npm install crx3
 
-      # ── 5. Write signing key (safe: secret never touches run: directly) ─────
-      #
-      #  EXTENSION_KEY_B64 is a base64-encoded RSA 2048 PEM private key.
-      #  Generate once with:
-      #    openssl genrsa 2048 | base64 | pbcopy
-      #  Then add as GitHub secret: Settings → Secrets → EXTENSION_KEY_B64
-      #
-      #  Using the same key every run locks the extension ID permanently so
-      #  Chrome knows it's the same extension across installs.
+      # 5. Write signing key
       - name: Write signing key
         env:
           EXTENSION_KEY_B64: ${{ secrets.EXTENSION_KEY_B64 }}
         run: |
           if [ -n "$EXTENSION_KEY_B64" ]; then
             echo "$EXTENSION_KEY_B64" | base64 -d > /tmp/extension.pem
-            echo "✅ Using stored signing key (stable extension ID)"
+            echo "Using stored signing key (stable extension ID)"
           else
             openssl genrsa 2048 > /tmp/extension.pem 2>/dev/null
-            echo "⚠️  No EXTENSION_KEY_B64 secret — generated a temporary key."
-            echo "⚠️  Extension ID will change each run until you add the secret."
-            echo "⚠️  See README: one-time setup → add EXTENSION_KEY_B64 secret"
+            echo "WARNING: No EXTENSION_KEY_B64 secret - generated a temporary key."
+            echo "Extension ID will change each run until you add the secret."
           fi
 
-      # ── 6. Pack the .crx via library API (more stable than CLI flags) ────────
+      # 6. Pack the .crx
       - name: Pack extension
         run: node scripts/pack-crx.js
         env:
@@ -71,15 +61,7 @@ jobs:
           CRX_OUT_PATH: public/extension/genspark-kb-extractor.crx
           EXT_DIR: chrome-extension
 
-      # ── 7. Write updates.xml (Chrome auto-update manifest) ─────────────────
-      #
-      #  EXTENSION_ID is the 32-char ID Chrome assigns from the public key hash.
-      #  Set it as a GitHub Actions variable (not secret — it's not sensitive):
-      #    Settings → Secrets and variables → Actions → Variables → EXTENSION_ID
-      #
-      #  To find your extension ID: pack once, install the .crx, then check
-      #  chrome://extensions/ for the ID. It stays the same while you keep the
-      #  same EXTENSION_KEY_B64 secret.
+      # 7. Write updates.xml (Chrome auto-update manifest)
       - name: Write update manifest
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -87,26 +69,24 @@ jobs:
         run: |
           EXT_ID="${EXTENSION_ID:-YOUR_EXTENSION_ID_HERE}"
           if [ "$EXT_ID" = "YOUR_EXTENSION_ID_HERE" ]; then
-            echo "⚠️  EXTENSION_ID variable not set — updates.xml will have a placeholder ID."
-            echo "⚠️  After first install, find your ID in chrome://extensions/ and add it."
+            echo "WARNING: EXTENSION_ID variable not set - updates.xml will have a placeholder ID."
           fi
           cat > public/extension/updates.xml << 'XMLEOF'
-<?xml version='1.0' encoding='UTF-8'?>
-<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-  <app appid='PLACEHOLDER_ID'>
-    <updatecheck
-      codebase='https://kb.insightprofit.live/extension/genspark-kb-extractor.crx'
-      version='PLACEHOLDER_VERSION'/>
-  </app>
-</gupdate>
-XMLEOF
+          <?xml version='1.0' encoding='UTF-8'?>
+          <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+            <app appid='PLACEHOLDER_ID'>
+              <updatecheck
+                codebase='https://kb.insightprofit.live/extension/genspark-kb-extractor.crx'
+                version='PLACEHOLDER_VERSION'/>
+            </app>
+          </gupdate>
+          XMLEOF
           sed -i "s/PLACEHOLDER_ID/$EXT_ID/g" public/extension/updates.xml
           sed -i "s/PLACEHOLDER_VERSION/$VERSION/g" public/extension/updates.xml
-          echo ""
-          echo "📋 updates.xml:"
+          echo "updates.xml:"
           cat public/extension/updates.xml
 
-      # ── 8. Commit the packed files back to main ────────────────────────────
+      # 8. Commit the packed files back to main
       - name: Commit extension files
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -115,10 +95,9 @@ XMLEOF
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/extension/
           if git diff --cached --quiet; then
-            echo "No changes to commit — .crx is already current"
+            echo "No changes to commit - .crx is already current"
           else
             git commit -m "ci: pack extension v${VERSION} [skip ci]"
             git push
-            echo "✅ Extension files committed and pushed"
-            echo "🌐 Available at: https://kb.insightprofit.live/extension/genspark-kb-extractor.crx"
+            echo "Extension files committed and pushed"
           fi
