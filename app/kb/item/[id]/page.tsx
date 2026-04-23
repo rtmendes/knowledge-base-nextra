@@ -238,7 +238,7 @@ async function ItemContent({ params }: Props) {
       {/* ── Content ─────────────────────────────────────────────── */}
       {item.content ? (
         <article className="prose prose-gray dark:prose-invert max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-a:text-amber-600 dark:prose-a:text-amber-400 prose-img:rounded-xl prose-img:border prose-img:border-gray-200 dark:prose-img:border-gray-700 prose-pre:bg-gray-950 dark:prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 prose-code:text-violet-600 dark:prose-code:text-violet-400 prose-blockquote:border-amber-400 dark:prose-blockquote:border-amber-500 prose-blockquote:not-italic pb-8">
-          <KBContentRenderer content={item.content} isHtml={!!hasHtml} />
+          <KBContentRenderer content={item.content} isHtml={!!hasHtml} itemType={item.item_type} />
         </article>
       ) : item.content_plain ? (
         <article className="prose prose-gray dark:prose-invert max-w-none pb-8">
