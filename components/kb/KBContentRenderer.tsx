@@ -469,6 +469,7 @@ type Block =
   | { type: 'list'; ordered: boolean; items: string[] }
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'image'; src: string; alt: string }
+  | { type: 'html-embed'; html: string }
   | { type: 'empty' }
 
 function parseBlocks(text: string): Block[] {
@@ -494,6 +495,63 @@ function parseBlocks(text: string): Block[] {
       i++
       blocks.push({ type: 'code', lang, code: codeLines.join('\n') })
       continue
+    }
+
+    // ── Embedded HTML pages (<!DOCTYPE html> or <html> blocks inside markdown) ──
+    if (/^<!doctype\s+html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+      const htmlLines: string[] = [line]
+      i++
+      let depth = 1
+      while (i < lines.length) {
+        htmlLines.push(lines[i])
+        if (/<html[\s>]/i.test(lines[i])) depth++
+        if (/<\/html>/i.test(lines[i])) { depth--; if (depth <= 0) { i++; break } }
+        i++
+      }
+      blocks.push({ type: 'html-embed', html: htmlLines.join('\n') })
+      continue
+    }
+    // Also catch <style> ... </style> ... <div> blocks that form a standalone interactive page
+    if (/^<style[\s>]/i.test(trimmed) && !trimmed.includes('</style>')) {
+      // Look ahead: if we find </style> and then <div> tags, this is an interactive HTML block
+      let j = i + 1
+      let foundStyleEnd = false
+      while (j < lines.length && j < i + 200) {
+        if (/<\/style>/i.test(lines[j])) { foundStyleEnd = true; break }
+        j++
+      }
+      if (foundStyleEnd) {
+        // Check if there's HTML structure after the style block
+        let hasHtmlStructure = false
+        for (let k = j + 1; k < Math.min(j + 10, lines.length); k++) {
+          if (/<div[\s>]/i.test(lines[k]) || /<body[\s>]/i.test(lines[k]) || /<section[\s>]/i.test(lines[k])) {
+            hasHtmlStructure = true
+            break
+          }
+        }
+        if (hasHtmlStructure) {
+          // Collect everything from <style> to the end of the HTML structure
+          const htmlLines: string[] = []
+          while (i < lines.length) {
+            htmlLines.push(lines[i])
+            // Stop at </html>, </body>, or when we hit markdown again after closing tags
+            if (/<\/html>/i.test(lines[i]) || /<\/body>/i.test(lines[i])) { i++; break }
+            // If we've passed the style block and hit a blank line followed by markdown
+            if (i > j + 5 && lines[i].trim() === '' && i + 1 < lines.length) {
+              const next = lines[i + 1].trim()
+              if (/^#{1,6}\s/.test(next) || /^[-*]\s/.test(next) || /^\d+\.\s/.test(next)) { i++; break }
+            }
+            i++
+          }
+          // Wrap in proper HTML if needed
+          let html = htmlLines.join('\n')
+          if (!/<html/i.test(html)) {
+            html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${html}</body></html>`
+          }
+          blocks.push({ type: 'html-embed', html })
+          continue
+        }
+      }
     }
 
     // Horizontal rule
@@ -705,6 +763,9 @@ function renderBlock(block: Block, key: number): React.ReactNode {
           )}
         </figure>
       )
+
+    case 'html-embed':
+      return <InteractiveHtmlRenderer key={key} content={block.html} />
 
     case 'code':
       return (
