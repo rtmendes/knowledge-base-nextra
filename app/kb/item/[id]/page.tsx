@@ -112,7 +112,7 @@ async function ItemContent({ params }: Props) {
       {/* ── Article Header ──────────────────────────────────────── */}
       <header className="mb-10 pb-8 border-b border-gray-200 dark:border-gray-800">
         {/* Title */}
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50 mb-4 leading-tight">
+        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4 leading-tight kb-item-title">
           {item.title}
         </h1>
 
