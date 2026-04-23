@@ -210,3 +210,112 @@
 .kb-filter-scroll::-webkit-scrollbar {
   display: none;
 }
+
+
+/* ── KB Table of Contents ─────────────────────────────────────── */
+
+.kb-toc a {
+  display: block;
+  transition: all 0.15s ease;
+}
+
+.kb-toc a:hover {
+  transform: translateX(4px);
+}
+
+/* ── KB Chat Bubbles ──────────────────────────────────────────── */
+
+.kb-md-content > p {
+  max-width: 72ch;
+}
+
+/* ── KB HTML Content Extra Styles ─────────────────────────────── */
+
+.kb-html-content details {
+  @apply my-4 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden;
+}
+
+.kb-html-content details summary {
+  @apply px-4 py-3 bg-gray-50 dark:bg-gray-800/60 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none;
+}
+
+.kb-html-content details[open] summary {
+  @apply border-b border-gray-200 dark:border-gray-700;
+}
+
+.kb-html-content details > *:not(summary) {
+  @apply px-4 py-3;
+}
+
+/* Definition lists */
+.kb-html-content dl {
+  @apply my-4;
+}
+
+.kb-html-content dt {
+  @apply font-semibold text-gray-900 dark:text-gray-100 mt-4 mb-1;
+}
+
+.kb-html-content dd {
+  @apply ml-6 text-gray-600 dark:text-gray-400 leading-7;
+}
+
+/* Figure/caption */
+.kb-html-content figure {
+  @apply my-6;
+}
+
+.kb-html-content figcaption {
+  @apply mt-2 text-center text-sm text-gray-500 dark:text-gray-400 italic;
+}
+
+/* Mark/highlight */
+.kb-html-content mark {
+  @apply bg-amber-100 dark:bg-amber-800/30 text-amber-900 dark:text-amber-200 px-1 rounded;
+}
+
+/* Keyboard shortcuts */
+.kb-html-content kbd {
+  @apply inline-flex items-center rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-600 dark:text-gray-300 shadow-sm;
+}
+
+/* Abbreviations */
+.kb-html-content abbr {
+  @apply underline decoration-dotted underline-offset-4 cursor-help;
+}
+
+/* Fix scraped content with div soup */
+.kb-html-content > div > p,
+.kb-html-content > div > ul,
+.kb-html-content > div > ol,
+.kb-html-content > div > h1,
+.kb-html-content > div > h2,
+.kb-html-content > div > h3,
+.kb-html-content > div > h4 {
+  /* Let the parent styles cascade through wrapper divs */
+}
+
+/* ── Print Styles ─────────────────────────────────────────────── */
+
+@media print {
+  .kb-toc {
+    page-break-inside: avoid;
+  }
+  
+  .kb-html-content,
+  .kb-md-content {
+    @apply text-black;
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+  
+  .kb-html-content a,
+  .kb-md-content a {
+    @apply text-blue-800 no-underline;
+  }
+  
+  .kb-html-content a::after {
+    content: " (" attr(href) ")";
+    @apply text-gray-500 text-xs;
+  }
+}
