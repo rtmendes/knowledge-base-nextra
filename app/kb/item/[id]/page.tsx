@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { getItemById, getItemTypeConfig, getCategoryIcon } from '../../../../lib/supabase-kb'
 import { ItemTypeBadge } from '../../../../components/kb/ItemTypeBadge'
-import { KBContentRenderer } from '../../../../components/kb/KBContentRenderer'
+import { KBContentSection } from '../../../../components/kb/KBContentSection'
 import { supabaseAdmin } from '../../../../lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -195,29 +195,15 @@ async function ItemContent({ params }: Props) {
         </div>
       )}
 
-      {/* ── Content ─────────────────────────────────────────────── */}
-      {item.content ? (
-        <article className="pb-8">
-          <KBContentRenderer content={item.content} itemType={item.item_type} />
-        </article>
-      ) : item.content_plain ? (
-        <article className="pb-8">
-          <KBContentRenderer content={item.content_plain} itemType={item.item_type} />
-        </article>
-      ) : (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-8 text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-900/20 mb-3">
-            <span className="text-2xl">📝</span>
-          </div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">No content yet</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-            This item doesn&apos;t have content yet.
-            {sourceUrl && (
-              <> View the <a href={sourceUrl} className="text-amber-600 dark:text-amber-400 underline hover:no-underline" target="_blank" rel="noopener noreferrer">original source</a>.</>
-            )}
-          </p>
-        </div>
-      )}
+      {/* ── Content (with WYSIWYG editor) ───────────────────────── */}
+      <article className="pb-8">
+        <KBContentSection
+          itemId={item.id}
+          content={item.content || ''}
+          contentPlain={item.content_plain || ''}
+          itemType={item.item_type}
+        />
+      </article>
 
       {/* ── Footer ──────────────────────────────────────────────── */}
       <div className="border-t border-gray-200 dark:border-gray-800 pt-6 pb-12">

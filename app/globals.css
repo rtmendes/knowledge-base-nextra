@@ -301,6 +301,185 @@ html {
   display: none;
 }
 
+/* ── WYSIWYG Editor Styles (TipTap) ──────────────────────────── */
+
+/* Editor wrapper */
+.kb-editor-wrapper {
+  @apply transition-shadow duration-200;
+}
+
+.kb-editor-wrapper:focus-within {
+  @apply ring-2 ring-amber-400/50 dark:ring-amber-500/30 border-amber-300 dark:border-amber-700;
+}
+
+/* Editor content area — inherits from .kb-prose but with editor-specific overrides */
+.kb-editor-content {
+  @apply text-gray-700 dark:text-gray-300;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.kb-editor-content > *:first-child {
+  margin-top: 0 !important;
+}
+
+/* Headings in editor */
+.kb-editor-content h1 {
+  @apply text-3xl font-extrabold mt-8 mb-4 text-gray-900 dark:text-gray-50 tracking-tight;
+  line-height: 1.2;
+}
+
+.kb-editor-content h2 {
+  @apply text-2xl font-bold mt-8 mb-3 text-gray-900 dark:text-gray-50 tracking-tight pb-2 border-b border-gray-200 dark:border-gray-800;
+  line-height: 1.25;
+}
+
+.kb-editor-content h3 {
+  @apply text-xl font-semibold mt-6 mb-2 text-gray-900 dark:text-gray-100;
+  line-height: 1.3;
+}
+
+.kb-editor-content h4 {
+  @apply text-lg font-semibold mt-5 mb-2 text-gray-800 dark:text-gray-200;
+}
+
+/* Paragraphs */
+.kb-editor-content p {
+  @apply my-3 leading-7;
+}
+
+/* Lists */
+.kb-editor-content ul {
+  @apply my-3 ml-6 list-disc;
+}
+
+.kb-editor-content ol {
+  @apply my-3 ml-6 list-decimal;
+}
+
+.kb-editor-content li {
+  @apply my-1 leading-7;
+}
+
+.kb-editor-content li p {
+  @apply my-0;
+}
+
+/* Links */
+.kb-editor-link,
+.kb-editor-content a {
+  @apply text-amber-600 dark:text-amber-400 underline underline-offset-2 decoration-amber-300/50 dark:decoration-amber-700/50 cursor-pointer;
+}
+
+/* Inline code */
+.kb-editor-content code {
+  @apply rounded-md bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 text-[0.875em] font-mono text-violet-600 dark:text-violet-400 border border-gray-200 dark:border-gray-700;
+}
+
+/* Code blocks */
+.kb-editor-code-block,
+.kb-editor-content pre {
+  @apply my-5 rounded-xl bg-gray-950 dark:bg-gray-900 p-5 overflow-x-auto border border-gray-200 dark:border-gray-800;
+}
+
+.kb-editor-content pre code {
+  @apply bg-transparent text-gray-100 dark:text-gray-200 px-0 py-0 text-sm font-mono border-0 leading-6;
+}
+
+/* Blockquotes */
+.kb-editor-content blockquote {
+  @apply my-5 border-l-4 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/40 pl-5 pr-4 py-2 rounded-r-lg;
+}
+
+.kb-editor-content blockquote p {
+  @apply my-1 italic text-gray-600 dark:text-gray-400;
+}
+
+/* Images */
+.kb-editor-image,
+.kb-editor-content img {
+  @apply my-5 rounded-xl border border-gray-200 dark:border-gray-700 max-w-full h-auto;
+}
+
+.kb-editor-content img.ProseMirror-selectednode {
+  @apply ring-2 ring-amber-400 dark:ring-amber-500;
+}
+
+/* Tables */
+.kb-editor-table,
+.kb-editor-content table {
+  @apply my-5 w-full border-collapse text-sm;
+}
+
+.kb-editor-content th {
+  @apply border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/80 text-xs;
+}
+
+.kb-editor-content td {
+  @apply border border-gray-300 dark:border-gray-600 px-3 py-2 text-gray-600 dark:text-gray-400;
+}
+
+.kb-editor-content td.selectedCell,
+.kb-editor-content th.selectedCell {
+  @apply bg-amber-50 dark:bg-amber-900/20;
+}
+
+/* Horizontal rule */
+.kb-editor-content hr {
+  @apply my-8 border-gray-200 dark:border-gray-800;
+}
+
+/* Strong & Em */
+.kb-editor-content strong {
+  @apply font-semibold text-gray-900 dark:text-gray-100;
+}
+
+.kb-editor-content em {
+  @apply italic;
+}
+
+/* Placeholder */
+.kb-editor-content p.is-editor-empty:first-child::before {
+  @apply text-gray-400 dark:text-gray-600;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ProseMirror gapcursor */
+.kb-editor-content .ProseMirror-gapcursor:after {
+  border-top-color: rgb(245 158 11); /* amber-500 */
+}
+
+/* Column resize handle for tables */
+.kb-editor-content .column-resize-handle {
+  @apply bg-amber-400 dark:bg-amber-500;
+  width: 2px;
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+/* Toolbar styles */
+.kb-editor-toolbar {
+  @apply select-none;
+}
+
+/* Editor save success animation */
+@keyframes kb-save-flash {
+  0% { opacity: 0; transform: translateY(-4px); }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-fade-in {
+  animation: kb-save-flash 4s ease-out both;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    KB Chat Assistant Styles
    ══════════════════════════════════════════════════════════════════════════ */
