@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://supabase.insightprofit.live';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
-const EMBED_URL = process.env.EMBED_SERVICE_URL || 'http://embed-service:8787';
+const EMBED_URL = process.env.EMBED_SERVICE_URL || 'https://embed.insightprofit.live';
 
 export async function POST(request: Request) {
   try {
