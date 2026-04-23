@@ -16,10 +16,8 @@
 
 import path from 'path'
 import fs from 'fs'
-import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
 
-// crx3 may not have ESM exports, so use createRequire as fallback
 const require = createRequire(import.meta.url)
 
 const KEY_PATH = process.env.CRX_KEY_PATH || '/tmp/extension.pem'
@@ -44,10 +42,10 @@ console.log('   Source:', path.resolve(EXT_DIR))
 console.log('   Key:   ', KEY_PATH)
 console.log('   Output:', path.resolve(OUT_PATH))
 
-// crx3 library API: crx3(dirs, options) -> Promise<void>
+// crx3 API uses keyPath and crxPath (not key/crx which are CLI-only aliases)
 const crx3 = require('crx3')
 
-crx3([EXT_DIR], { crx: OUT_PATH, key: KEY_PATH })
+crx3([EXT_DIR], { crxPath: OUT_PATH, keyPath: KEY_PATH })
   .then(() => {
     const size = fs.statSync(OUT_PATH).size
     console.log('CRX3 packed successfully')
