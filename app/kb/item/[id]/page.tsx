@@ -13,45 +13,6 @@ interface Props {
   params: Promise<{ id: string }>
 }
 
-/** Render plain text with smart paragraph splitting. */
-function PlainTextRenderer({ text }: { text: string }) {
-  // If the text has natural newlines, respect them
-  const hasNaturalBreaks = (text.match(/\n/g) || []).length > 5
-  if (hasNaturalBreaks) {
-    const paragraphs = text.split(/\n{2,}/)
-    return (
-      <div className="space-y-4">
-        {paragraphs.map((p, i) => (
-          <p key={i} className="text-gray-700 dark:text-gray-300 leading-7 whitespace-pre-wrap">
-            {p.trim()}
-          </p>
-        ))}
-      </div>
-    )
-  }
-  // Otherwise, break long unformatted text at sentence boundaries
-  const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z])/)
-  const paragraphs: string[] = []
-  let current: string[] = []
-  for (const s of sentences) {
-    current.push(s)
-    if (current.join(' ').length > 600) {
-      paragraphs.push(current.join(' '))
-      current = []
-    }
-  }
-  if (current.length) paragraphs.push(current.join(' '))
-  return (
-    <div className="space-y-4">
-      {paragraphs.map((p, i) => (
-        <p key={i} className="text-gray-700 dark:text-gray-300 leading-7">
-          {p.trim()}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 async function getCategoryById(id: string) {
   if (!supabaseAdmin) return null
   const { data } = await supabaseAdmin
@@ -80,7 +41,6 @@ async function ItemContent({ params }: Props) {
   const category = item.category_id ? await getCategoryById(item.category_id) : null
   const catIcon = category ? getCategoryIcon(category.icon) : '📄'
   const tags = item.tags || []
-  const hasHtml = item.content && (item.content.includes('<') || item.content.includes('&lt;'))
   const sourceUrl = (item as any).source_url || item.metadata?.source_url || item.metadata?.url || item.metadata?.genspark_url || null
 
   // Format date
@@ -91,7 +51,7 @@ async function ItemContent({ params }: Props) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 kb-page-wrapper">
       {/* ── Breadcrumb ──────────────────────────────────────────── */}
       <nav className="flex items-center gap-2 pt-8 mb-8 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
         <Link href="/" className="hover:text-amber-500 transition-colors">Home</Link>
@@ -237,12 +197,12 @@ async function ItemContent({ params }: Props) {
 
       {/* ── Content ─────────────────────────────────────────────── */}
       {item.content ? (
-        <article className="prose prose-gray dark:prose-invert max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-a:text-amber-600 dark:prose-a:text-amber-400 prose-img:rounded-xl prose-img:border prose-img:border-gray-200 dark:prose-img:border-gray-700 prose-pre:bg-gray-950 dark:prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 prose-code:text-violet-600 dark:prose-code:text-violet-400 prose-blockquote:border-amber-400 dark:prose-blockquote:border-amber-500 prose-blockquote:not-italic pb-8">
-          <KBContentRenderer content={item.content} isHtml={!!hasHtml} itemType={item.item_type} />
+        <article className="pb-8">
+          <KBContentRenderer content={item.content} itemType={item.item_type} />
         </article>
       ) : item.content_plain ? (
-        <article className="prose prose-gray dark:prose-invert max-w-none pb-8">
-          <PlainTextRenderer text={item.content_plain} />
+        <article className="pb-8">
+          <KBContentRenderer content={item.content_plain} itemType={item.item_type} />
         </article>
       ) : (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-8 text-center mb-8">
