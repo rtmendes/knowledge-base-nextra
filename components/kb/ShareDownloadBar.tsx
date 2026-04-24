@@ -114,32 +114,41 @@ ${htmlContent}
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Share / Copy Link */}
-      <button
-        onClick={handleCopyLink}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-          copied
-            ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400'
-        }`}
-        title="Copy shareable link"
-      >
-        {copied ? (
-          <>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            Link Copied!
-          </>
-        ) : (
-          <>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
-            Share
-          </>
-        )}
-      </button>
+      {/* URL display + Copy Link — prominent and visible */}
+      <div className={`inline-flex items-center gap-0 rounded-lg border overflow-hidden transition-all ${
+        copied
+          ? 'border-emerald-300 dark:border-emerald-700'
+          : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+      }`}>
+        <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[200px] sm:max-w-[300px] border-r border-gray-200 dark:border-gray-700">
+          {shareUrl.replace(/^https?:\/\//, '')}
+        </div>
+        <button
+          onClick={handleCopyLink}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all ${
+            copied
+              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+              : 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+          }`}
+          title="Copy shareable link"
+        >
+          {copied ? (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Copied!
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Copy Link
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Open in new tab */}
       <button

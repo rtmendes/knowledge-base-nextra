@@ -4,8 +4,9 @@ import React, { useMemo, useState, useCallback } from 'react'
 
 interface Props {
   content: string
-  isHtml: boolean
+  isHtml?: boolean
   itemType?: string
+  metadata?: Record<string, any> | null
 }
 
 // ── Content Size Thresholds ──────────────────────────────────────────────
@@ -332,8 +333,65 @@ function ChatRenderer({ text }: { text: string }) {
 }
 
 // ── Main Export ───────────────────────────────────────────────────────────
-export function KBContentRenderer({ content, isHtml, itemType }: Props) {
+// ── Broken Genspark Spark Detection ──────────────────────────────────────
+function isBrokenGensparkContent(content: string): boolean {
+  // Content that's just the Genspark login shell chrome (failed scrape)
+  return content.includes('Genspark AI Workspace') && content.includes('Genspark Claw') && content.length < 2000
+}
+
+// ── Genspark Source Card ─────────────────────────────────────────────────
+function GensparkSourceCard({ metadata, title }: { metadata: Record<string, any>; title?: string }) {
+  const rawUrl = metadata?.raw_url || metadata?.source_url || null
+  const sparkId = rawUrl?.match(/spark\?id=([a-f0-9-]+)/)?.[1] || metadata?.genspark_key || null
+
+  return (
+    <div className="my-6 rounded-2xl border border-purple-200 dark:border-purple-800/50 bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-purple-950/30 dark:via-gray-900 dark:to-indigo-950/20 p-8 shadow-lg">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-md">
+          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
+            Interactive Genspark Page
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            This content is an interactive Genspark spark page. Click below to view the full interactive experience.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {rawUrl && (
+              <a
+                href={rawUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Open in Genspark
+              </a>
+            )}
+            {sparkId && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 font-mono border border-gray-200 dark:border-gray-700">
+                Spark ID: {sparkId.slice(0, 8)}…
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function KBContentRenderer({ content, isHtml, itemType, metadata }: Props) {
   if (!content) return null
+
+  // ── Handle broken Genspark scrapes (show "Open in Genspark" card) ──
+  if (isBrokenGensparkContent(content) && metadata?.raw_url) {
+    return <GensparkSourceCard metadata={metadata} />
+  }
 
   // Extract title from first H1 for dedup
   const titleMatch = content.match(/^#\s+(.+)/m)
@@ -725,6 +783,139 @@ function parseBlocks(text: string): Block[] {
   return blocks
 }
 
+// ── Genspark .space Embed ─────────────────────────────────────────────────
+function GensparkSpaceEmbed({ url }: { url: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const iframeHeight = expanded ? '85vh' : '500px'
+  const subdomain = url.match(/https:\/\/([a-zA-Z0-9]+)\.genspark\.space/)?.[1] || ''
+
+  return (
+    <div className="my-6 rounded-2xl border border-indigo-200 dark:border-indigo-800/50 overflow-hidden shadow-md bg-white dark:bg-gray-900">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/30 border-b border-indigo-200 dark:border-indigo-800/50">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-lg">✨</span>
+          <span className="font-semibold text-indigo-700 dark:text-indigo-300">Interactive Spark</span>
+          <span className="text-xs text-indigo-400 dark:text-indigo-500 font-mono">{subdomain}.genspark.space</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors flex items-center gap-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            Open
+          </a>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs font-medium text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors flex items-center gap-1"
+          >
+            {expanded ? '↙ Collapse' : '↗ Expand'}
+          </button>
+        </div>
+      </div>
+      {loadError ? (
+        <div className="p-8 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">This spark page couldn&apos;t be embedded.</p>
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors">
+            Open in New Tab →
+          </a>
+        </div>
+      ) : (
+        <div style={{ height: iframeHeight }} className="transition-all duration-300">
+          <iframe
+            src={url}
+            className="w-full h-full"
+            sandbox="allow-scripts allow-same-origin allow-popups"
+            title={`Genspark spark: ${subdomain}`}
+            loading="lazy"
+            onError={() => setLoadError(true)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Collapsible Code Block ────────────────────────────────────────────────
+function CollapsibleCodeBlock({ lang, code, defaultCollapsed }: { lang: string; code: string; defaultCollapsed: boolean }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  const [copied, setCopied] = useState(false)
+  const lineCount = code.split('\n').length
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
+  }, [code])
+
+  return (
+    <div className="my-6 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-mono border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-400" />
+          <span className="w-2 h-2 rounded-full bg-yellow-400" />
+          <span className="w-2 h-2 rounded-full bg-green-400" />
+          {lang && <span className="ml-2">{lang}</span>}
+          <span className="text-gray-400 dark:text-gray-500 ml-1">({lineCount} lines)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            title="Copy code"
+          >
+            {copied ? (
+              <><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-emerald-500">Copied</span></>
+            ) : (
+              <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg><span>Copy</span></>
+            )}
+          </button>
+          {defaultCollapsed && (
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-medium"
+            >
+              <svg className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              {collapsed ? 'Show Code' : 'Hide Code'}
+            </button>
+          )}
+        </div>
+      </div>
+      {collapsed ? (
+        <div
+          className="bg-gray-950 dark:bg-gray-900 px-5 py-3 cursor-pointer hover:bg-gray-900 dark:hover:bg-gray-800 transition-colors"
+          onClick={() => setCollapsed(false)}
+        >
+          <pre className="overflow-x-auto">
+            <code className="text-sm text-gray-400 dark:text-gray-500 font-mono leading-6">
+              {code.split('\n').slice(0, 3).join('\n')}
+            </code>
+          </pre>
+          <div className="mt-2 text-center">
+            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-800 dark:bg-gray-700 px-3 py-1 rounded-full">
+              ▾ Click to expand {lineCount} lines
+            </span>
+          </div>
+        </div>
+      ) : (
+        <pre className="bg-gray-950 dark:bg-gray-900 p-5 overflow-x-auto max-h-[600px] overflow-y-auto">
+          <code className="text-sm text-gray-100 dark:text-gray-200 font-mono leading-6">{code}</code>
+        </pre>
+      )}
+    </div>
+  )
+}
+
 function renderBlock(block: Block, key: number): React.ReactNode {
   switch (block.type) {
     case 'heading': {
@@ -740,12 +931,18 @@ function renderBlock(block: Block, key: number): React.ReactNode {
       return <Tag key={key} id={block.id} className={classes[block.level] || classes[3]}>{renderInline(block.text)}</Tag>
     }
 
-    case 'paragraph':
+    case 'paragraph': {
+      // Detect standalone genspark.space URLs → render as iframe preview
+      const gensparkUrlMatch = block.text.trim().match(/^(?:\[.*?\]\()?(https:\/\/[a-zA-Z0-9]+\.genspark\.space\/?[^\s\)]*)(?:\))?$/)
+      if (gensparkUrlMatch) {
+        return <GensparkSpaceEmbed key={key} url={gensparkUrlMatch[1]} />
+      }
       return (
         <p key={key} className="text-gray-700 dark:text-gray-300 leading-7 my-4 max-w-prose">
           {renderInline(block.text)}
         </p>
       )
+    }
 
     case 'image':
       return (
@@ -767,22 +964,11 @@ function renderBlock(block: Block, key: number): React.ReactNode {
     case 'html-embed':
       return <InteractiveHtmlRenderer key={key} content={block.html} />
 
-    case 'code':
-      return (
-        <div key={key} className="my-6 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
-          {block.lang && (
-            <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-mono border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-400" />
-              <span className="w-2 h-2 rounded-full bg-yellow-400" />
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="ml-2">{block.lang}</span>
-            </div>
-          )}
-          <pre className="bg-gray-950 dark:bg-gray-900 p-5 overflow-x-auto">
-            <code className="text-sm text-gray-100 dark:text-gray-200 font-mono leading-6">{block.code}</code>
-          </pre>
-        </div>
-      )
+    case 'code': {
+      const lineCount = block.code.split('\n').length
+      const shouldCollapse = lineCount > 15
+      return <CollapsibleCodeBlock key={key} lang={block.lang} code={block.code} defaultCollapsed={shouldCollapse} />
+    }
 
     case 'blockquote':
       return (

@@ -28,6 +28,7 @@ interface Props {
   content: string
   contentPlain?: string
   itemType?: string
+  metadata?: Record<string, any> | null
 }
 
 interface VersionEntry {
@@ -38,7 +39,7 @@ interface VersionEntry {
   created_at: string
 }
 
-export function KBContentSection({ itemId, content, contentPlain, itemType }: Props) {
+export function KBContentSection({ itemId, content, contentPlain, itemType, metadata }: Props) {
   const [isEditing, setIsEditing] = useState(false)
   const [currentContent, setCurrentContent] = useState(content)
   const [editContent, setEditContent] = useState('')
@@ -275,7 +276,7 @@ export function KBContentSection({ itemId, content, contentPlain, itemType }: Pr
       {isEditing ? (
         <KBContentEditor content={displayContent} onChange={setEditContent} itemId={itemId} />
       ) : displayContent ? (
-        <KBContentRenderer content={displayContent} itemType={itemType} />
+        <KBContentRenderer content={displayContent} itemType={itemType} metadata={metadata} />
       ) : (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-8 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-900/20 mb-3">

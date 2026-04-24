@@ -214,6 +214,7 @@ async function ItemContent({ params }: Props) {
           content={item.content || ''}
           contentPlain={item.content_plain || ''}
           itemType={item.item_type}
+          metadata={item.metadata || null}
         />
       </article>
 
