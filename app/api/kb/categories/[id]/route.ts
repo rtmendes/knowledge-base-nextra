@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '../../../../../lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH /api/kb/categories/[id] — update a category
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   if (!supabaseAdmin) return NextResponse.json({ error: 'Not configured' }, { status: 500 })
 
+  const { id } = await params
   const body = await req.json()
   const updates: Record<string, any> = {}
   
@@ -21,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data, error } = await supabaseAdmin
     .from('kb_categories')
     .update(updates)
-    .eq('id', params.id)
+    .eq('id', id)
     .select()
     .single()
 
@@ -30,8 +36,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/kb/categories/[id] — delete a category (items moved to Uncategorized)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   if (!supabaseAdmin) return NextResponse.json({ error: 'Not configured' }, { status: 500 })
+
+  const { id } = await params
 
   // Find or create "Uncategorized" category
   let { data: uncategorized } = await supabaseAdmin
@@ -54,20 +65,20 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await supabaseAdmin
       .from('knowledge_items')
       .update({ category_id: uncategorized.id })
-      .eq('category_id', params.id)
+      .eq('category_id', id)
   }
 
   // Move child categories
   await supabaseAdmin
     .from('kb_categories')
     .update({ parent_category_id: null })
-    .eq('parent_category_id', params.id)
+    .eq('parent_category_id', id)
 
   // Delete the category
   const { error } = await supabaseAdmin
     .from('kb_categories')
     .delete()
-    .eq('id', params.id)
+    .eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ success: true })

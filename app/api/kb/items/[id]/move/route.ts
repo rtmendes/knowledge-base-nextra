@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '../../../../../../lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH /api/kb/items/[id]/move — move item to a different category or parent
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   if (!supabaseAdmin) return NextResponse.json({ error: 'Not configured' }, { status: 500 })
 
+  const { id } = await params
   const body = await req.json()
   const { category_id, parent_id } = body
 
@@ -15,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data, error } = await supabaseAdmin
     .from('knowledge_items')
     .update(updates)
-    .eq('id', params.id)
+    .eq('id', id)
     .select('id, title, category_id, parent_id')
     .single()
 

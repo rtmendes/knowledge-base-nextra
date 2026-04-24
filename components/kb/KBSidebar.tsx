@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,6 @@ export function KBSidebar({
   selectionMode, selectedIds, onToggleSelection, onToggleSelectionMode,
 }: KBSidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [categoryItems, setCategoryItems] = useState<Record<string, SidebarItem[]>>({})
   const [loadingCategories, setLoadingCategories] = useState<Set<string>>(new Set())
