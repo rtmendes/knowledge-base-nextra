@@ -921,3 +921,104 @@ html {
   background: #f59e0b;
   border-radius: 1px;
 }
+
+/* ── BlockNote Editor Styles ──────────────────────────────────── */
+
+.kb-blocknote-container .bn-editor {
+  min-height: 400px;
+  padding: 16px 24px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* Side menu (drag handle) visibility on hover */
+.kb-blocknote-container .bn-side-menu {
+  opacity: 0.3;
+  transition: opacity 0.15s ease;
+}
+.kb-blocknote-container .bn-block-outer:hover > .bn-side-menu,
+.kb-blocknote-container .bn-side-menu:hover,
+.kb-blocknote-container .bn-side-menu[data-visible="true"] {
+  opacity: 1;
+}
+
+/* Slash menu and suggestion menus */
+.kb-blocknote-container .bn-slash-menu,
+.kb-blocknote-container .bn-suggestion-menu {
+  max-height: 320px;
+  overflow-y: auto;
+  border-radius: 12px;
+}
+
+/* Table styling */
+.kb-blocknote-container table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+.kb-blocknote-container th,
+.kb-blocknote-container td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  min-width: 80px;
+}
+.dark .kb-blocknote-container th,
+.dark .kb-blocknote-container td {
+  border-color: #374151;
+}
+
+/* Image blocks */
+.kb-blocknote-container img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 4px 0;
+}
+
+/* Code blocks */
+.kb-blocknote-container pre {
+  border-radius: 8px;
+  padding: 16px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.kb-blocknote-container code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+}
+
+/* Checklist */
+.kb-blocknote-container [data-content-type="checkListItem"] input[type="checkbox"] {
+  accent-color: #f59e0b;
+  width: 16px;
+  height: 16px;
+}
+
+/* Nested block indentation */
+.kb-blocknote-container .bn-block-group .bn-block-group {
+  margin-left: 24px;
+  border-left: 2px solid #e5e7eb;
+  padding-left: 12px;
+}
+.dark .kb-blocknote-container .bn-block-group .bn-block-group {
+  border-left-color: #374151;
+}
+
+/* Links */
+.kb-blocknote-container a {
+  color: #d97706;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dark .kb-blocknote-container a {
+  color: #fbbf24;
+}
+
+/* Drop indicator */
+.kb-blocknote-container .ProseMirror-dropcursor {
+  color: #f59e0b !important;
+}
+
+/* Ensure menus don't get clipped */
+.kb-editor-wrapper {
+  overflow: visible !important;
+}
