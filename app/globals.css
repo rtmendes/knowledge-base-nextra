@@ -1022,3 +1022,40 @@ html {
 .kb-editor-wrapper {
   overflow: visible !important;
 }
+
+/* ── Inline Database Styles ───────────────────────────────────── */
+
+.kb-inline-database table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.kb-inline-database th,
+.kb-inline-database td {
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dark .kb-inline-database th,
+.dark .kb-inline-database td {
+  border-bottom-color: #1f2937;
+}
+
+.kb-inline-database tr:last-child td {
+  border-bottom: none;
+}
+
+.kb-inline-database input,
+.kb-inline-database select {
+  transition: background-color 0.15s ease;
+}
+
+.kb-inline-database input:focus,
+.kb-inline-database select:focus {
+  background-color: #fffbeb;
+}
+
+.dark .kb-inline-database input:focus,
+.dark .kb-inline-database select:focus {
+  background-color: rgba(245, 158, 11, 0.05);
+}

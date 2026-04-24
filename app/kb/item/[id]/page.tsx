@@ -6,6 +6,7 @@ import { ItemTypeBadge } from '../../../../components/kb/ItemTypeBadge'
 import { KBContentSection } from '../../../../components/kb/KBContentSection'
 import { ShareDownloadBar } from '../../../../components/kb/ShareDownloadBar'
 import { ItemPageToC } from '../../../../components/kb/ItemPageToC'
+import { ItemDatabasesSection } from '../../../../components/kb/database/ItemDatabasesSection'
 import { supabaseAdmin } from '../../../../lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -216,6 +217,9 @@ async function ItemContent({ params }: Props) {
           itemType={item.item_type}
           metadata={item.metadata || null}
         />
+
+        {/* ── Inline Databases (Notion-like) ──────────────────────── */}
+        <ItemDatabasesSection itemId={item.id} />
       </article>
 
       {/* ── Footer ──────────────────────────────────────────────── */}
