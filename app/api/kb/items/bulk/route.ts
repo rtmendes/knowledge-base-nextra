@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../../lib/supabase'
+import { supabaseAdmin } from '../../../../../lib/supabase'
 
 // POST /api/kb/items/bulk — bulk move, delete, or tag items
 export async function POST(req: NextRequest) {
