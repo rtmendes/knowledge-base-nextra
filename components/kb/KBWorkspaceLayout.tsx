@@ -5,6 +5,9 @@ import { usePathname } from 'next/navigation'
 import { KBSidebar } from './KBSidebar'
 import { CommandPalette } from './CommandPalette'
 import { CreateItemModal } from './CreateItemModal'
+import { CreateCategoryModal } from './CreateCategoryModal'
+import { BulkOperationsBar } from './BulkOperationsBar'
+import { TagsPanel } from './TagsPanel'
 
 interface Category {
   id: string
@@ -13,6 +16,7 @@ interface Category {
   icon: string
   color: string
   item_count: number
+  parent_category_id?: string | null
 }
 
 interface KBWorkspaceLayoutProps {
@@ -21,14 +25,24 @@ interface KBWorkspaceLayoutProps {
   rightPanel?: React.ReactNode
 }
 
-export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorkspaceLayoutProps) {
+export function KBWorkspaceLayout({ categories: initialCategories, children, rightPanel }: KBWorkspaceLayoutProps) {
   const pathname = usePathname()
+  const [categories, setCategories] = useState(initialCategories)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false)
+  const [tagsPanelOpen, setTagsPanelOpen] = useState(false)
+
+  // Bulk selection state
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Open sidebar by default on desktop
   const [sidebarDesktopOpen, setSidebarDesktopOpen] = useState(true)
+
+  // Sync categories if they change from server
+  useEffect(() => { setCategories(initialCategories) }, [initialCategories])
 
   // Global ⌘K handler
   useEffect(() => {
@@ -37,10 +51,15 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
         e.preventDefault()
         setCommandPaletteOpen(prev => !prev)
       }
+      // Escape to exit selection mode
+      if (e.key === 'Escape' && selectionMode) {
+        setSelectionMode(false)
+        setSelectedIds(new Set())
+      }
     }
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
-  }, [])
+  }, [selectionMode])
 
   // Close mobile sidebar on navigation
   useEffect(() => {
@@ -49,6 +68,35 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
 
   const handleCreateItem = useCallback(() => {
     setCreateModalOpen(true)
+  }, [])
+
+  const handleCreateCategory = useCallback(() => {
+    setCreateCategoryOpen(true)
+  }, [])
+
+  const handleCategoryCreated = useCallback((newCategory: any) => {
+    setCategories(prev => [...prev, { ...newCategory, item_count: newCategory.item_count || 0 }])
+  }, [])
+
+  const handleToggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleToggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => {
+      if (prev) setSelectedIds(new Set()) // Clear selection when exiting
+      return !prev
+    })
+  }, [])
+
+  const handleBulkComplete = useCallback(() => {
+    // Force a page refresh to update counts
+    window.location.reload()
   }, [])
 
   const isItemPage = pathname.startsWith('/kb/item/')
@@ -62,6 +110,12 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
           isOpen={true}
           onClose={() => setSidebarDesktopOpen(false)}
           onCreateItem={handleCreateItem}
+          onCreateCategory={handleCreateCategory}
+          onTagsPanel={() => setTagsPanelOpen(true)}
+          selectionMode={selectionMode}
+          selectedIds={selectedIds}
+          onToggleSelection={handleToggleSelection}
+          onToggleSelectionMode={handleToggleSelectionMode}
         />
       </div>
 
@@ -72,6 +126,12 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           onCreateItem={handleCreateItem}
+          onCreateCategory={handleCreateCategory}
+          onTagsPanel={() => setTagsPanelOpen(true)}
+          selectionMode={selectionMode}
+          selectedIds={selectedIds}
+          onToggleSelection={handleToggleSelection}
+          onToggleSelectionMode={handleToggleSelectionMode}
         />
       </div>
 
@@ -82,8 +142,6 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
           {/* Sidebar toggle */}
           <button
             onClick={() => {
-              // Desktop: toggle persistent sidebar
-              // Mobile: toggle overlay sidebar
               if (window.innerWidth >= 1024) {
                 setSidebarDesktopOpen(prev => !prev)
               } else {
@@ -110,6 +168,28 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
             <kbd className="hidden sm:inline-flex items-center gap-0.5 ml-auto px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-mono text-gray-400">
               ⌘K
             </kbd>
+          </button>
+
+          {/* Tags button */}
+          <button
+            onClick={() => setTagsPanelOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="Tags"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+            <span className="hidden sm:inline">Tags</span>
+          </button>
+
+          {/* Selection mode toggle */}
+          <button
+            onClick={handleToggleSelectionMode}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${selectionMode ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            title={selectionMode ? 'Exit bulk select' : 'Bulk select'}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span className="hidden sm:inline">{selectionMode ? `${selectedIds.size} selected` : 'Select'}</span>
           </button>
 
           {/* Create button */}
@@ -152,6 +232,27 @@ export function KBWorkspaceLayout({ categories, children, rightPanel }: KBWorksp
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         categories={categories}
+      />
+
+      {/* Create Category Modal */}
+      <CreateCategoryModal
+        isOpen={createCategoryOpen}
+        onClose={() => setCreateCategoryOpen(false)}
+        onCreated={handleCategoryCreated}
+      />
+
+      {/* Tags Panel */}
+      <TagsPanel
+        isOpen={tagsPanelOpen}
+        onClose={() => setTagsPanelOpen(false)}
+      />
+
+      {/* Bulk Operations Bar */}
+      <BulkOperationsBar
+        selectedIds={selectedIds}
+        categories={categories}
+        onClearSelection={() => { setSelectedIds(new Set()); setSelectionMode(false) }}
+        onOperationComplete={handleBulkComplete}
       />
     </div>
   )

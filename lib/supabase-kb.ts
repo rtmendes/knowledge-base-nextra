@@ -12,6 +12,7 @@ export interface KBCategory {
   item_count: number
   sort_order: number
   is_system: boolean
+  parent_category_id?: string | null
 }
 
 export interface KBItem {
@@ -20,6 +21,7 @@ export interface KBItem {
   slug: string
   item_type: string
   category_id: string
+  parent_id?: string | null
   content?: string
   content_plain?: string
   word_count: number
@@ -134,7 +136,7 @@ export async function getItems(opts: {
 
   let query = supabaseAdmin
     .from('knowledge_items')
-    .select('id, title, slug, item_type, category_id, word_count, tags, status, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at, metadata', { count: 'exact' })
+    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at, metadata', { count: 'exact' })
 
   if (opts.categoryId) query = query.eq('category_id', opts.categoryId)
   if (opts.itemType) query = query.eq('item_type', opts.itemType)
