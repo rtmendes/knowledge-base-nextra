@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Suspense } from 'react'
 import { getCategories, getItems, getTotalStats, getItemTypeCounts, getCategoryIcon } from '../../lib/supabase-kb'
 import { CategoryCard } from '../../components/kb/CategoryCard'
@@ -48,51 +49,82 @@ async function KBContent({ searchParams }: Props) {
   const activeCategories = categories.filter(c => c.item_count > 0)
   const emptyCategories = categories.filter(c => c.item_count === 0)
 
-  // Top categories for featured section
+  // Top 6 categories get the featured (large cover image) treatment
   const featuredCategories = [...activeCategories]
     .sort((a, b) => b.item_count - a.item_count)
-    .slice(0, 8)
+    .slice(0, 6)
+
+  const remainingCategories = activeCategories
+    .filter(c => !featuredCategories.find(f => f.id === c.id))
+    .sort((a, b) => b.item_count - a.item_count)
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* ── Hero Section ────────────────────────────────────────── */}
-      <div className="pt-8 pb-10 sm:pt-12 sm:pb-14">
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 mb-6 text-xs text-gray-400 dark:text-gray-500">
-          <Link href="/" className="hover:text-amber-500 transition-colors">Home</Link>
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          <span className="text-gray-600 dark:text-gray-300 font-medium">Knowledge Base</span>
-        </nav>
+      {/* ── Hero Section with Cover Image ────────────────────────── */}
+      <div className="relative -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden">
+        {/* Hero background image */}
+        <div className="relative h-72 sm:h-80 lg:h-96">
+          <Image
+            src="/images/kb-hero.webp"
+            alt="Knowledge Base Command Center"
+            fill
+            className="object-cover"
+            priority
+            sizes="100vw"
+          />
+          {/* Multi-layer gradient overlay for readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-gray-950/60 via-gray-950/50 to-gray-950/95" />
+          <div className="absolute inset-0 bg-gradient-to-r from-amber-950/20 via-transparent to-amber-950/20" />
+          
+          {/* Content on top of hero */}
+          <div className="absolute inset-0 flex flex-col justify-end px-4 sm:px-6 lg:px-8 pb-8 sm:pb-10">
+            {/* Breadcrumb */}
+            <nav className="flex items-center gap-2 mb-5 text-xs text-gray-300/80">
+              <Link href="/" className="hover:text-amber-400 transition-colors">Home</Link>
+              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              <span className="text-white font-medium">Knowledge Base</span>
+            </nav>
 
-        {/* Title block */}
-        <div className="max-w-3xl">
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50 mb-3">
-            Knowledge Base
-          </h1>
-          <p className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed">
-            Search and explore {stats.totalItems.toLocaleString()} items across {stats.totalCategories} categories.
-            Your central hub for SOPs, research, AI agents, product docs, and inspiration.
-          </p>
-        </div>
-
-        {/* Stats bar */}
-        <div className="flex flex-wrap items-center gap-6 mt-6">
-          {[
-            { value: stats.totalItems.toLocaleString(), label: 'Items', icon: '📚' },
-            { value: stats.totalCategories.toString(), label: 'Categories', icon: '🗂️' },
-            { value: stats.totalWithContent.toLocaleString(), label: 'With content', icon: '📝' },
-          ].map((stat) => (
-            <div key={stat.label} className="flex items-center gap-2">
-              <span className="text-base">{stat.icon}</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100 tabular-nums">{stat.value}</span>
-              <span className="text-xs text-gray-400 dark:text-gray-500">{stat.label}</span>
+            {/* Title + Description */}
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center backdrop-blur-sm">
+                  <span className="text-xl">📚</span>
+                </div>
+                <span className="text-xs font-bold text-amber-400/90 uppercase tracking-wider">InsightProfit</span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white mb-3 drop-shadow-lg">
+                Knowledge Base
+              </h1>
+              <p className="text-base sm:text-lg text-gray-300/90 leading-relaxed max-w-2xl">
+                Search and explore {stats.totalItems.toLocaleString()} items across {stats.totalCategories} categories.
+                Your central hub for SOPs, research, AI agents, product docs, and inspiration.
+              </p>
             </div>
-          ))}
+
+            {/* Stats pills — glassmorphism */}
+            <div className="flex flex-wrap items-center gap-3 mt-6">
+              {[
+                { value: stats.totalItems.toLocaleString(), label: 'Items', icon: '📚', color: 'from-amber-500/20 to-amber-600/10 border-amber-500/20' },
+                { value: stats.totalCategories.toString(), label: 'Categories', icon: '🗂️', color: 'from-blue-500/20 to-blue-600/10 border-blue-500/20' },
+                { value: stats.totalWithContent.toLocaleString(), label: 'With content', icon: '📝', color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20' },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl bg-gradient-to-r ${stat.color} backdrop-blur-md border shadow-lg shadow-black/10`}
+                >
+                  <span className="text-sm">{stat.icon}</span>
+                  <span className="text-sm font-bold text-white tabular-nums">{stat.value}</span>
+                  <span className="text-xs text-gray-300/70">{stat.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── Search & Filters ────────────────────────────────────── */}
-      <div className="pb-2">
+      <div className="pt-8 pb-2">
         <div className="max-w-2xl mb-4">
           <Suspense fallback={<div className="h-12 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />}>
             <SemanticSearchBar basePath="/kb" placeholder="AI-powered search across all knowledge items…" />
@@ -162,22 +194,47 @@ async function KBContent({ searchParams }: Props) {
       ) : (
         /* ── Category Browse ──────────────────────────────────────── */
         <div className="pb-16">
-          {/* Featured categories */}
-          <div className="mb-12">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                Browse Categories
-              </h2>
-              <span className="text-xs text-gray-400 dark:text-gray-500">
-                {activeCategories.length} active categories
-              </span>
+          {/* Featured categories — large cards with cover images */}
+          <div className="mb-14">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  Featured Collections
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Top categories by content volume
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {activeCategories.length} active
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 kb-stagger">
-              {activeCategories.map(cat => (
-                <CategoryCard key={cat.id} category={cat} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 kb-stagger">
+              {featuredCategories.map(cat => (
+                <CategoryCard key={cat.id} category={cat} featured />
               ))}
             </div>
           </div>
+
+          {/* All other categories — standard cards with thumbnail strips */}
+          {remainingCategories.length > 0 && (
+            <div className="mb-12">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                  All Categories
+                </h2>
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {remainingCategories.length} more
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 kb-stagger">
+                {remainingCategories.map(cat => (
+                  <CategoryCard key={cat.id} category={cat} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Empty categories */}
           {emptyCategories.length > 0 && (
@@ -201,15 +258,24 @@ async function KBContent({ searchParams }: Props) {
 export default function KBPage(props: Props) {
   return (
     <Suspense fallback={
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16">
-        <div className="h-12 w-72 bg-gray-200 dark:bg-gray-800 rounded-lg mb-3 animate-pulse" />
-        <div className="h-5 w-[480px] max-w-full bg-gray-100 dark:bg-gray-800 rounded mb-8 animate-pulse" />
-        <div className="h-12 max-w-2xl bg-gray-100 dark:bg-gray-800 rounded-xl mb-6 animate-pulse" />
-        <hr className="border-gray-200 dark:border-gray-800 my-6" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-44 bg-gray-100 dark:bg-gray-800 rounded-2xl animate-pulse" />
-          ))}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Hero skeleton */}
+        <div className="relative -mx-4 sm:-mx-6 lg:-mx-8 h-72 sm:h-80 lg:h-96 bg-gray-900 animate-pulse overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-950/50 to-gray-950" />
+          <div className="absolute bottom-8 left-4 sm:left-6 lg:left-8">
+            <div className="h-8 w-48 bg-gray-800 rounded-lg mb-3 animate-pulse" />
+            <div className="h-12 w-80 bg-gray-800 rounded-lg mb-3 animate-pulse" />
+            <div className="h-5 w-[480px] max-w-full bg-gray-800 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="pt-8">
+          <div className="h-12 max-w-2xl bg-gray-100 dark:bg-gray-800 rounded-xl mb-6 animate-pulse" />
+          <hr className="border-gray-200 dark:border-gray-800 my-6" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-64 bg-gray-100 dark:bg-gray-800 rounded-2xl animate-pulse" />
+            ))}
+          </div>
         </div>
       </div>
     }>
