@@ -28,12 +28,10 @@ const nextConfig = {
         // Apply to all routes
         source: '/(.*)',
         headers: [
+          // X-Frame-Options removed — using CSP frame-ancestors instead
+          // to allow embedding in Command Center and InsightProfit apps
           {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
-          },
-          {
-            // CSP: allow iframes from known interactive tool domains
+            // CSP: allow iframes from known interactive tool domains + allow embedding by Command Center
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
@@ -42,6 +40,7 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https:",
               "frame-src 'self' https://mission-control-six-zeta.vercel.app https://app.clickup.com https://*.vercel.app https://*.genspark.ai https://*.manus.app",
+              "frame-ancestors 'self' https://command.insightprofit.live https://*.insightprofit.live",
               "connect-src 'self' https:",
               "media-src 'self' blob: data: https:",
               "worker-src blob:",
