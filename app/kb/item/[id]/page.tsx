@@ -212,8 +212,7 @@ async function ItemContent({ params }: Props) {
       <article className="pb-8">
         <KBContentSection
           itemId={item.id}
-          content={item.content || ''}
-          contentPlain={item.content_plain || ''}
+          content={item.content || item.content_plain || ''}
           itemType={item.item_type}
           metadata={item.metadata || null}
         />
@@ -263,8 +262,8 @@ async function ItemContent({ params }: Props) {
         </details>
       )}
 
-      {/* ── Right panel ToC (injected via portal) ───────────────── */}
-      <ItemPageToC content={item.content || ''} />
+      {/* ── Right panel ToC — pass empty string; component reads headings from rendered DOM */}
+      <ItemPageToC content="" />
     </div>
   )
 }
