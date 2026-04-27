@@ -3,6 +3,8 @@ import './globals.css'
 import type { ReactNode } from 'react'
 import { getNavTree, navTreeToPageMap } from '../lib/page-map'
 import { KBChatAssistant } from '../components/KBChatAssistant'
+import { AppShell } from '../components/AppShell'
+import { UserMenu } from '../components/UserMenu'
 
 export const metadata = {
   title: 'InsightProfit Knowledge Base',
@@ -71,6 +73,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <AppShell>
         <Layout
           navbar={
             <Navbar
@@ -79,7 +82,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   InsightProfit KB
                 </span>
               }
-            />
+            >
+              <UserMenu />
+            </Navbar>
           }
           pageMap={pageMap}
           docsRepositoryBase="https://github.com/rtmendes/knowledge-base-nextra"
@@ -117,6 +122,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           {children}
         </Layout>
         <KBChatAssistant />
+        </AppShell>
       </body>
     </html>
   )

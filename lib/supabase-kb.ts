@@ -158,9 +158,11 @@ export async function getItems(opts: {
 
 export async function getItemById(id: string): Promise<KBItem | null> {
   if (!supabaseAdmin) return null
+  // Select specific columns to avoid serializing content_plain twice
+  // (content_plain duplicates content and bloats the RSC payload)
   const { data, error } = await supabaseAdmin
     .from('knowledge_items')
-    .select('*')
+    .select('id, title, slug, item_type, category_id, parent_id, content, word_count, tags, status, metadata, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at, source_url, content_plain')
     .eq('id', id)
     .single()
   if (error) { console.error('[kb] getItemById error:', error); return null }

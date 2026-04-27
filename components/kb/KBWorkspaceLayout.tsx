@@ -8,6 +8,7 @@ import { CreateItemModal } from './CreateItemModal'
 import { CreateCategoryModal } from './CreateCategoryModal'
 import { BulkOperationsBar } from './BulkOperationsBar'
 import { TagsPanel } from './TagsPanel'
+import { ResizablePanelGroup } from './ResizablePanels'
 
 interface Category {
   id: string
@@ -101,25 +102,25 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
 
   const isItemPage = pathname.startsWith('/kb/item/')
 
+  // Sidebar component (shared between desktop resizable + mobile overlay)
+  const sidebarContent = (
+    <KBSidebar
+      categories={categories}
+      isOpen={true}
+      onClose={() => setSidebarDesktopOpen(false)}
+      onCreateItem={handleCreateItem}
+      onCreateCategory={handleCreateCategory}
+      onTagsPanel={() => setTagsPanelOpen(true)}
+      selectionMode={selectionMode}
+      selectedIds={selectedIds}
+      onToggleSelection={handleToggleSelection}
+      onToggleSelectionMode={handleToggleSelectionMode}
+    />
+  )
+
   return (
     <div className="kb-workspace-layout flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* Left Sidebar */}
-      <div className={`flex-shrink-0 ${sidebarDesktopOpen ? 'hidden lg:block' : 'hidden'}`}>
-        <KBSidebar
-          categories={categories}
-          isOpen={true}
-          onClose={() => setSidebarDesktopOpen(false)}
-          onCreateItem={handleCreateItem}
-          onCreateCategory={handleCreateCategory}
-          onTagsPanel={() => setTagsPanelOpen(true)}
-          selectionMode={selectionMode}
-          selectedIds={selectedIds}
-          onToggleSelection={handleToggleSelection}
-          onToggleSelectionMode={handleToggleSelectionMode}
-        />
-      </div>
-
-      {/* Mobile Sidebar */}
+      {/* Mobile Sidebar (overlay) */}
       <div className="lg:hidden">
         <KBSidebar
           categories={categories}
@@ -135,9 +136,14 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
         />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Toolbar */}
+      {/* Resizable three-panel layout */}
+      <ResizablePanelGroup
+        sidebar={sidebarContent}
+        sidebarVisible={sidebarDesktopOpen}
+        rightPanel={isItemPage ? rightPanel : undefined}
+        rightPanelVisible={isItemPage && !!rightPanel}
+      >
+        {/* Toolbar + Main Content (center panel) */}
         <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm">
           {/* Sidebar toggle */}
           <button
@@ -204,21 +210,11 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
           </button>
         </div>
 
-        {/* Content + Right Panel */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Main content area */}
-          <main className="flex-1 overflow-y-auto kb-main-scroll">
-            {children}
-          </main>
-
-          {/* Right Panel (ToC) - only on item pages on large screens */}
-          {isItemPage && rightPanel && (
-            <aside className="hidden xl:block flex-shrink-0 w-56 border-l border-gray-100 dark:border-gray-800 overflow-y-auto py-6 px-4">
-              {rightPanel}
-            </aside>
-          )}
-        </div>
-      </div>
+        {/* Scrollable content area — no max-width cap so it fills available space */}
+        <main className="flex-1 overflow-y-auto kb-main-scroll">
+          {children}
+        </main>
+      </ResizablePanelGroup>
 
       {/* Command Palette */}
       <CommandPalette
