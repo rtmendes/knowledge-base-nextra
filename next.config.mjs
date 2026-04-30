@@ -7,6 +7,8 @@ const withNextra = nextra({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // NOTE: ignoreBuildErrors temporarily kept for incremental migration.
+  // TODO: Remove once all type errors are resolved (tracked as tech debt).
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -58,7 +60,14 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "connect-src 'self' https:",
+              "frame-ancestors 'self' https://command.insightprofit.live https://*.insightprofit.live",
+            ].join('; '),
           },
           {
             key: 'Access-Control-Allow-Origin',

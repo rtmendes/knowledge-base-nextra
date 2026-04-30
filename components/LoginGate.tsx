@@ -85,8 +85,8 @@ export function LoginGate({ children, allowPublic = false }: LoginGateProps) {
               try {
                 setError('');
                 await signInWithGoogle();
-              } catch (e: any) {
-                setError(e.message || 'Google sign-in failed');
+              } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : 'Sign-in failed. Please try again');
               }
             }}
             style={{
@@ -134,8 +134,8 @@ export function LoginGate({ children, allowPublic = false }: LoginGateProps) {
                 try {
                   setError('');
                   await signInWithEmail(email, password);
-                } catch (e: any) {
-                  setError(e.message || 'Sign-in failed');
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : 'Sign-in failed. Please try again');
                 }
               }}
             >

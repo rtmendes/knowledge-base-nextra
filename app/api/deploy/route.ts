@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 function authorize(req: NextRequest): boolean {
   const key = process.env.AGENT_API_KEY
-  if (!key) return true
+  if (!key) return false // SECURITY: deny if no key configured (was: allow)
   return req.headers.get('authorization') === `Bearer ${key}`
 }
 

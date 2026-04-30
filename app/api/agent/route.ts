@@ -14,7 +14,7 @@ import { reader } from '../../../lib/keystatic'
 
 function authorize(req: NextRequest): boolean {
   const key = process.env.AGENT_API_KEY
-  if (!key) return true // no key configured = open access (dev mode)
+  if (!key) return false // SECURITY: deny if no key configured (was: open access)
   const auth = req.headers.get('authorization')
   return auth === `Bearer ${key}`
 }

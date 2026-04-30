@@ -9,6 +9,11 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+
+    // Extract authenticated user from middleware headers
+    const authUid = request.headers.get('x-auth-uid') || 'unknown'
+    const authEmail = request.headers.get('x-auth-email') || 'unknown'
+
     const body = await request.json()
     const { content } = body
 
@@ -46,7 +51,7 @@ export async function PUT(
         content: currentItem.content,
         content_plain: currentItem.content_plain,
         word_count: currentItem.word_count || 0,
-        edited_by: 'user',
+        edited_by: authEmail,
         version_number: nextVersion,
       })
     }
