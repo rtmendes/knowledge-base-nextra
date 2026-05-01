@@ -6,6 +6,7 @@
  *
  * Fortune 100 Requirements Addressed:
  *  - Server-side auth enforcement (not client-side only)
+ *  - Full RSA signature verification using Web Crypto API
  *  - Token validation with issuer, audience, expiry, and issued-at checks
  *  - Rate limiting headers for downstream enforcement
  *  - Audit trail headers (x-auth-uid, x-auth-email)
@@ -19,8 +20,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const FIREBASE_PROJECT_ID =
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'ip7yjxh0ymissek75ig3r6f1ffm0kj';
 
-const GOOGLE_CERTS_URL =
-  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+// JWK endpoint — easier to use with Web Crypto than X.509 PEM certs
+const GOOGLE_JWKS_URL =
+  'https://www.googleapis.com/robot/v1/metadata/jwk/securetoken@system.gserviceaccount.com';
 
 // Routes that DON'T require Firebase auth
 const PUBLIC_ROUTES = [
@@ -48,28 +50,38 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3001',
 ];
 
-// ── Google Certs Cache (Edge-compatible) ──────────────────────────────────────
+// ── Google JWK Cache (Edge-compatible) ────────────────────────────────────────
 
-let certsCache: Record<string, string> | null = null;
-let certsExpiry = 0;
+interface GoogleJWK {
+  kid: string;
+  kty: string;
+  alg: string;
+  use: string;
+  n: string;
+  e: string;
+}
 
-async function getGoogleCerts(): Promise<Record<string, string>> {
-  if (certsCache && Date.now() < certsExpiry) return certsCache;
-  const res = await fetch(GOOGLE_CERTS_URL, { next: { revalidate: 3600 } });
-  if (!res.ok) throw new Error(`Failed to fetch Google certs: ${res.status}`);
-  const certs = await res.json();
+let jwksCache: GoogleJWK[] | null = null;
+let jwksExpiry = 0;
+
+async function getGoogleJWKs(): Promise<GoogleJWK[]> {
+  if (jwksCache && Date.now() < jwksExpiry) return jwksCache;
+
+  const res = await fetch(GOOGLE_JWKS_URL);
+  if (!res.ok) throw new Error(`Failed to fetch Google JWKs: ${res.status}`);
+  const data = await res.json();
 
   // Respect Cache-Control max-age if present, else default 1hr
   const cc = res.headers.get('cache-control') || '';
   const maxAgeMatch = cc.match(/max-age=(\d+)/);
   const maxAge = maxAgeMatch ? parseInt(maxAgeMatch[1], 10) * 1000 : 3600_000;
 
-  certsCache = certs;
-  certsExpiry = Date.now() + maxAge;
-  return certs;
+  jwksCache = data.keys || [];
+  jwksExpiry = Date.now() + maxAge;
+  return jwksCache!;
 }
 
-// ── JWT Decode (Edge-compatible, no Node crypto) ──────────────────────────────
+// ── JWT Decode (Edge-compatible) ──────────────────────────────────────────────
 
 function base64UrlDecode(str: string): string {
   const padded = str + '='.repeat((4 - (str.length % 4)) % 4);
@@ -77,55 +89,114 @@ function base64UrlDecode(str: string): string {
   return binary;
 }
 
-function decodeJwtPayload(token: string): Record<string, any> | null {
+function base64UrlToArrayBuffer(str: string): ArrayBuffer {
+  const binary = base64UrlDecode(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function decodeJwtHeader(token: string): Record<string, any> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = base64UrlDecode(parts[1]);
-    return JSON.parse(payload);
+    return JSON.parse(base64UrlDecode(parts[0]));
   } catch {
     return null;
   }
 }
 
-// ── Token Verification (lightweight, Edge-compatible) ─────────────────────────
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(base64UrlDecode(parts[1]));
+  } catch {
+    return null;
+  }
+}
+
+// ── Full Token Verification (Edge-compatible, Web Crypto API) ─────────────────
 
 async function verifyFirebaseToken(
   token: string
 ): Promise<{ uid: string; email?: string; role?: string } | null> {
   try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    // 1. Decode header and payload
+    const header = decodeJwtHeader(token);
     const claims = decodeJwtPayload(token);
-    if (!claims) return null;
+    if (!header || !claims) return null;
 
-    // Check issuer
+    // 2. Validate claims (fast, no network)
     if (claims.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`) return null;
-
-    // Check audience
     if (claims.aud !== FIREBASE_PROJECT_ID) return null;
 
     const now = Math.floor(Date.now() / 1000);
-
-    // Check expiry
     if (!claims.exp || claims.exp < now) return null;
-
-    // Check issued-at (must not be in the future)
-    if (!claims.iat || claims.iat > now + 60) return null; // 60s clock skew allowance
-
-    // Check auth_time (must not be in the future)
+    if (!claims.iat || claims.iat > now + 60) return null;
     if (claims.auth_time && claims.auth_time > now + 60) return null;
-
-    // Check sub (must be a non-empty string)
     if (!claims.sub || typeof claims.sub !== 'string') return null;
 
-    // NOTE: Full RSA signature verification requires Web Crypto API with
-    // importKey (X.509/SPKI). For Fortune 100, we verify claims + structure.
-    // The full signature check is done server-side in firebase-admin.ts
-    // for write operations. Edge middleware provides fast claim validation.
-    //
-    // To add full sig verification in Edge:
-    // 1. Parse PEM cert → DER → crypto.subtle.importKey('spki', ...)
-    // 2. crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, sig, data)
-    // This is deferred to Phase 2 as it requires PEM-to-DER conversion.
+    // 3. Verify RSA signature using Web Crypto API
+    const kid = header.kid;
+    if (!kid || header.alg !== 'RS256') return null;
+
+    const jwks = await getGoogleJWKs();
+    const jwk = jwks.find((k) => k.kid === kid);
+    if (!jwk) {
+      // Key not found — force refresh cache and retry once
+      jwksCache = null;
+      jwksExpiry = 0;
+      const refreshedJwks = await getGoogleJWKs();
+      const refreshedJwk = refreshedJwks.find((k) => k.kid === kid);
+      if (!refreshedJwk) return null;
+      return verifyWithJWK(refreshedJwk, parts, claims);
+    }
+
+    return verifyWithJWK(jwk, parts, claims);
+  } catch {
+    return null;
+  }
+}
+
+async function verifyWithJWK(
+  jwk: GoogleJWK,
+  parts: string[],
+  claims: Record<string, any>
+): Promise<{ uid: string; email?: string; role?: string } | null> {
+  try {
+    // Import the public key from JWK format
+    const key = await crypto.subtle.importKey(
+      'jwk',
+      {
+        kty: jwk.kty,
+        n: jwk.n,
+        e: jwk.e,
+        alg: 'RS256',
+        use: 'sig',
+      },
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+
+    // Verify the signature
+    const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+    const signature = base64UrlToArrayBuffer(parts[2]);
+
+    const valid = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      key,
+      signature,
+      data
+    );
+
+    if (!valid) return null;
 
     return {
       uid: claims.sub,
@@ -161,14 +232,14 @@ function csrfCheck(request: NextRequest): boolean {
 
 function verifyAgentKey(request: NextRequest): boolean {
   const key = process.env.AGENT_API_KEY;
-  if (!key) return false; // FIXED: if no key configured, DENY (was: allow)
+  if (!key) return false; // If no key configured, DENY
   const auth = request.headers.get('authorization');
   return auth === `Bearer ${key}`;
 }
 
 // ── Middleware ─────────────────────────────────────────────────────────────────
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Skip non-API routes (pages are protected client-side by LoginGate)
@@ -208,44 +279,20 @@ export function middleware(request: NextRequest) {
 
   const token = authHeader.slice(7);
 
-  // For agent-key routes, we already checked the key above and it didn't match.
-  // Now check if it's a valid Firebase token instead.
-  // For all other routes, verify Firebase token.
-
-  // NOTE: We can't use async in Edge middleware matcher easily,
-  // so we do synchronous JWT decode + claim validation here.
-  // The claims-based check catches expired/malformed/wrong-project tokens.
-  const claims = decodeJwtPayload(token);
-  if (!claims) {
+  // Full verification: claims + RSA signature via Web Crypto
+  const user = await verifyFirebaseToken(token);
+  if (!user) {
     return NextResponse.json(
-      { error: 'Unauthorized', code: 'INVALID_TOKEN' },
-      { status: 401 }
-    );
-  }
-
-  // Validate claims
-  const now = Math.floor(Date.now() / 1000);
-  if (
-    claims.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}` ||
-    claims.aud !== FIREBASE_PROJECT_ID ||
-    !claims.exp ||
-    claims.exp < now ||
-    !claims.iat ||
-    claims.iat > now + 60 ||
-    !claims.sub ||
-    typeof claims.sub !== 'string'
-  ) {
-    return NextResponse.json(
-      { error: 'Unauthorized', code: 'TOKEN_VALIDATION_FAILED' },
+      { error: 'Unauthorized', code: 'TOKEN_VERIFICATION_FAILED' },
       { status: 401 }
     );
   }
 
   // Attach user info to request headers for downstream API routes
   const response = NextResponse.next();
-  response.headers.set('x-auth-uid', claims.sub);
-  if (claims.email) response.headers.set('x-auth-email', claims.email);
-  if (claims.role) response.headers.set('x-auth-role', claims.role);
+  response.headers.set('x-auth-uid', user.uid);
+  if (user.email) response.headers.set('x-auth-email', user.email);
+  if (user.role) response.headers.set('x-auth-role', user.role);
 
   return response;
 }

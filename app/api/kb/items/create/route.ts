@@ -71,13 +71,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Update category item count
-    await supabaseAdmin.rpc('increment_category_count', { cat_id: category_id }).catch(() => {
-      // If RPC doesn't exist, manually update
-      return supabaseAdmin
-        .from('kb_categories')
-        .update({ item_count: supabaseAdmin.rpc ? undefined : 0 })
-        .eq('id', category_id)
-    })
+    try {
+      await supabaseAdmin.rpc('increment_category_count', { cat_id: category_id })
+    } catch {
+      // If RPC doesn't exist, manually update — non-fatal
+      try {
+        await supabaseAdmin
+          .from('kb_categories')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', category_id)
+      } catch {
+        // Silently ignore — category count is non-critical
+      }
+    }
 
     return NextResponse.json({
       id: data.id,

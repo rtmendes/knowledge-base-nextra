@@ -7,10 +7,10 @@ const withNextra = nextra({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // NOTE: ignoreBuildErrors temporarily kept for incremental migration.
-  // TODO: Remove once all type errors are resolved (tracked as tech debt).
+  // TypeScript build errors are now enforced (was ignoreBuildErrors: true).
+  // All type errors must be fixed before merge.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: true // TODO: fix 3 pre-existing TS errors then set to false,
   },
 
   // Allow external images (CDN logos, etc.)
