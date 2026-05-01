@@ -21,8 +21,6 @@ const DATABASE_URL      = process.env.DATABASE_URL
 
 // ClickUp list IDs
 const BLOCKED_LIST_ID         = '901712867639';
-// const ACTIVE_BUILD_LIST_ID = '901712867634';  // for future use
-// const REVENUE_CRITICAL_LIST_ID = '901712867629'; // for future use
 
 const REVENUE_CRITICAL_PROJECTS = ['polsia', 'command-center', 'command_center'];
 
@@ -99,7 +97,7 @@ async function createClickUpTask(opts: {
         body: JSON.stringify({
           name: `🚨 Vercel build failed: ${projectName}`,
           description,
-          priority: isRevenueCritical ? 1 : 3, // 1=urgent, 3=normal
+          priority: isRevenueCritical ? 1 : 3,
           tags: ['vercel', 'build-failure', 'auto-triaged'],
           due_date_time: true,
           due_date:
@@ -123,8 +121,8 @@ async function createClickUpTask(opts: {
 }
 
 // ── Neon DB Logging ───────────────────────────────────────────
-// Requires: npm install pg @types/pg
-// Gracefully skipped if pg is not installed (non-fatal).
+// Uses fetch-based SQL (Neon HTTP driver) instead of pg module.
+// This avoids the "Module not found: pg" build error entirely.
 async function logToNeon(opts: {
   eventType: string;
   projectName: string;
@@ -134,40 +132,40 @@ async function logToNeon(opts: {
   rawPayload: unknown;
 }): Promise<void> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Pool } = require('pg') as typeof import('pg');
-    const pool = new Pool({ connectionString: DATABASE_URL });
+    if (!DATABASE_URL) return;
 
-    // Create table if first run
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS command_center.agent_runs (
-        id              BIGSERIAL PRIMARY KEY,
-        event_type      TEXT,
-        project_name    TEXT,
-        deployment_id   TEXT,
-        diagnosis       TEXT,
-        clickup_task_id TEXT,
-        raw_payload     JSONB,
-        created_at      TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
+    // Use Neon serverless HTTP endpoint for logging
+    // Parse connection string to build the Neon HTTP URL
+    const url = new URL(DATABASE_URL);
+    const host = url.hostname;
+    const httpUrl = `https://${host}/sql`;
 
-    await pool.query(
-      `INSERT INTO command_center.agent_runs
-         (event_type, project_name, deployment_id, diagnosis, clickup_task_id, raw_payload)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
-      [
-        opts.eventType,
-        opts.projectName,
-        opts.deploymentId,
-        opts.diagnosis,
-        opts.clickupTaskId,
-        JSON.stringify(opts.rawPayload),
-      ]
-    );
+    const res = await fetch(httpUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Neon-Connection-String': DATABASE_URL,
+      },
+      body: JSON.stringify({
+        query: `INSERT INTO command_center.agent_runs
+          (event_type, project_name, deployment_id, diagnosis, clickup_task_id, raw_payload)
+          VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        params: [
+          opts.eventType,
+          opts.projectName,
+          opts.deploymentId,
+          opts.diagnosis,
+          opts.clickupTaskId,
+          JSON.stringify(opts.rawPayload),
+        ],
+      }),
+    });
 
-    await pool.end();
-    console.log('[vercel-webhook] Logged to Neon ✓');
+    if (res.ok) {
+      console.log('[vercel-webhook] Logged to Neon ✓');
+    } else {
+      console.warn('[vercel-webhook] Neon logging failed:', res.status);
+    }
   } catch (err) {
     // Non-fatal — Groq + ClickUp work fine without DB logging
     console.warn('[vercel-webhook] Neon logging skipped:', (err as Error).message);
