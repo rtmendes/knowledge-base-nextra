@@ -16,37 +16,73 @@ const {
   NOTION_WEEKLY_REPORT_PARENT_ID,
 } = process.env;
 
-if (!NOTION_API_KEY || !NEON_DATABASE_URL) {
-  console.error('Missing required env vars: NOTION_API_KEY, NEON_DATABASE_URL');
-  process.exit(1);
-}
+// ── Diagnostics ───────────────────────────────────────────────────────────────
 
-const notion = new Client({ auth: NOTION_API_KEY });
-const sql = neon(NEON_DATABASE_URL);
+function checkEnv() {
+  const required = { NOTION_API_KEY, NEON_DATABASE_URL };
+  const optional = { NOTION_WEEKLY_REPORT_PARENT_ID, CLICKUP_API_KEY };
+
+  console.log('🔍 Environment check:');
+  for (const [k, v] of Object.entries(required)) {
+    const status = v ? `✅ set (${v.slice(0, 6)}…${v.slice(-4)})` : '❌ MISSING';
+    console.log(`  ${k}: ${status}`);
+  }
+  for (const [k, v] of Object.entries(optional)) {
+    const status = v ? `✅ set (${v.slice(0, 6)}…${v.slice(-4)})` : '⚠️ not set (optional)';
+    console.log(`  ${k}: ${status}`);
+  }
+
+  const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length) {
+    console.error(`\n❌ Missing required env vars: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
 
 // ── Data fetchers ─────────────────────────────────────────────────────────────
 
+let sql;
+try {
+  sql = neon(NEON_DATABASE_URL || '');
+} catch (err) {
+  console.error('❌ Failed to initialize Neon client:', err.message);
+  sql = null;
+}
+
 async function getProjectSummary() {
+  if (!sql) return [];
   try {
-    return await sql`
+    const rows = await sql`
       SELECT name, status, health, task_count, open_count, overdue_count, updated_at
       FROM command_center.projects
       ORDER BY health DESC, name ASC
     `;
-  } catch { return []; }
+    console.log(`  📂 Projects: ${rows.length} rows`);
+    return rows;
+  } catch (err) {
+    console.warn(`  ⚠️ Projects query failed: ${err.message}`);
+    return [];
+  }
 }
 
 async function getLiveProducts() {
+  if (!sql) return [];
   try {
-    return await sql`
+    const rows = await sql`
       SELECT name, status, url, notes
       FROM command_center.products
       ORDER BY status DESC, name ASC
     `;
-  } catch { return []; }
+    console.log(`  🚀 Products: ${rows.length} rows`);
+    return rows;
+  } catch (err) {
+    console.warn(`  ⚠️ Products query failed: ${err.message}`);
+    return [];
+  }
 }
 
 async function getTaskStats() {
+  if (!sql) return { total: 0, open_total: 0, overdue_total: 0, completed_total: 0 };
   try {
     const rows = await sql`
       SELECT
@@ -58,8 +94,13 @@ async function getTaskStats() {
         COUNT(*) FILTER (WHERE status IN ('complete','closed'))::int           AS completed_total
       FROM command_center.tasks
     `;
-    return rows[0] || { total: 0, open_total: 0, overdue_total: 0, completed_total: 0 };
-  } catch { return { total: 0, open_total: 0, overdue_total: 0, completed_total: 0 }; }
+    const stats = rows[0] || { total: 0, open_total: 0, overdue_total: 0, completed_total: 0 };
+    console.log(`  📋 Tasks: ${stats.total} total, ${stats.open_total} open, ${stats.overdue_total} overdue`);
+    return stats;
+  } catch (err) {
+    console.warn(`  ⚠️ Tasks query failed: ${err.message}`);
+    return { total: 0, open_total: 0, overdue_total: 0, completed_total: 0 };
+  }
 }
 
 // ── Report composer ───────────────────────────────────────────────────────────
@@ -150,7 +191,6 @@ function mdToNotionBlocks(markdown) {
         paragraph: { rich_text: [{ type: 'text', text: { content: line.replace(/\*\*/g, '') },
           annotations: { bold: true } }] } });
     } else if (line.trim() === '' || line.startsWith('|')) {
-      // skip markdown tables (Notion doesn't render them from API easily) & blank lines
       blocks.push({ object: 'block', type: 'paragraph',
         paragraph: { rich_text: [{ type: 'text', text: { content: line } }] } });
     } else {
@@ -163,38 +203,73 @@ function mdToNotionBlocks(markdown) {
 
 async function postToNotion(title, markdown) {
   if (!NOTION_WEEKLY_REPORT_PARENT_ID) {
-    console.log('NOTION_WEEKLY_REPORT_PARENT_ID not set — printing report to console\n');
+    console.log('⚠️ NOTION_WEEKLY_REPORT_PARENT_ID not set — printing report to console\n');
     console.log(markdown);
-    return;
+    return { fallback: 'console' };
   }
+
+  console.log(`📝 Creating Notion page under parent: ${NOTION_WEEKLY_REPORT_PARENT_ID.slice(0, 8)}…`);
+  const notion = new Client({ auth: NOTION_API_KEY });
   const blocks = mdToNotionBlocks(markdown);
-  const page = await notion.pages.create({
-    parent: { page_id: NOTION_WEEKLY_REPORT_PARENT_ID },
-    properties: { title: { title: [{ text: { content: title } }] } },
-    children: blocks,
-  });
-  console.log(`✅ Notion weekly report created: ${page.url}`);
+
+  try {
+    const page = await notion.pages.create({
+      parent: { page_id: NOTION_WEEKLY_REPORT_PARENT_ID },
+      properties: { title: { title: [{ text: { content: title } }] } },
+      children: blocks,
+    });
+    console.log(`✅ Notion weekly report created: ${page.url}`);
+    return page;
+  } catch (err) {
+    console.error(`❌ Notion API error: ${err.status || 'unknown'} — ${err.message}`);
+    if (err.body) console.error(`   Body: ${JSON.stringify(err.body)}`);
+    if (err.code) console.error(`   Code: ${err.code}`);
+
+    // Fall back to console output so the report is still visible in logs
+    console.log('\n📋 === REPORT (fallback — Notion failed) ===\n');
+    console.log(markdown);
+    console.log('\n=== END REPORT ===');
+
+    // Don't crash — the report was generated; only the Notion push failed
+    return { fallback: 'console', error: err.message };
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log('📊 Starting weekly report…');
+  console.log(`   Time: ${new Date().toISOString()}`);
+  console.log(`   Node: ${process.version}\n`);
 
+  checkEnv();
+
+  console.log('\n🔌 Fetching data from Neon…');
   const [projects, products, stats] = await Promise.all([
-    getProjectSummary().catch(e => { console.error('Projects error:', e.message); return []; }),
-    getLiveProducts().catch(e => { console.error('Products error:', e.message); return []; }),
-    getTaskStats().catch(e => { console.error('Stats error:', e.message); return {}; }),
+    getProjectSummary(),
+    getLiveProducts(),
+    getTaskStats(),
   ]);
 
-  console.log(`Projects: ${projects.length} | Products: ${products.length} | Tasks: ${stats.total || 0}`);
+  console.log(`\n📊 Summary: ${projects.length} projects | ${products.length} products | ${stats.total || 0} tasks`);
 
   const weekOf = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const title = `Weekly Report — Week of ${weekOf}`;
   const markdown = composeReport(projects, products, stats);
 
-  await postToNotion(title, markdown);
-  console.log('✅ Weekly report complete');
+  console.log('\n📤 Posting to Notion…');
+  const result = await postToNotion(title, markdown);
+
+  if (result?.fallback) {
+    console.warn('\n⚠️ Report completed with fallback (Notion push failed). Check logs above for details.');
+    // Exit 0 — the report itself was generated successfully
+  } else {
+    console.log('\n✅ Weekly report complete');
+  }
 }
 
-main().catch(err => { console.error('Fatal:', err); process.exit(1); });
+main().catch(err => {
+  console.error('\n💀 Fatal unhandled error:', err);
+  console.error('Stack:', err.stack);
+  process.exit(1);
+});
