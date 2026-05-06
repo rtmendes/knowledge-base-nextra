@@ -7,45 +7,23 @@ import { AppShell } from '../components/AppShell'
 import { UserMenu } from '../components/UserMenu'
 
 export const metadata = {
-  title: 'InsightProfit Knowledge Base',
-  description: 'Complete knowledge base for Insight Profit products and workflows',
+  metadataBase: new URL('https://knowledge-base-nextra.vercel.app'),
+  title: 'InsightProfit Knowledge Base — Operating System Documentation',
+  description: 'InsightProfit Knowledge Base centralizes product documentation, AI research notes, SOPs, interactive tools, and implementation guidance for the InsightProfit ecosystem.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'InsightProfit Knowledge Base — Operating System Documentation',
+    description: 'Product documentation, AI research notes, SOPs, interactive tools, and implementation guidance for the InsightProfit ecosystem.',
+    url: 'https://knowledge-base-nextra.vercel.app/',
+    siteName: 'InsightProfit Knowledge Base',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'InsightProfit Knowledge Base — Operating System Documentation',
+    description: 'Product documentation, AI research notes, SOPs, interactive tools, and implementation guidance for the InsightProfit ecosystem.',
+  },
 }
-
-// ── Static pages that always appear in the sidebar ──────────────────────────
-// These are App Router MDX pages NOT managed by Keystatic, so we hardcode them.
-const STATIC_PAGE_MAP: any[] = [
-  {
-    kind: 'MdxPage',
-    name: 'index',
-    route: '/',
-    frontMatter: { title: 'Home' },
-  },
-  {
-    kind: 'MdxPage',
-    name: 'kb',
-    route: '/kb',
-    frontMatter: { title: '📚 Knowledge Base' },
-  },
-  {
-    kind: 'MdxPage',
-    name: 'genspark',
-    route: '/genspark',
-    frontMatter: { title: '⚡ Genspark Projects' },
-  },
-  {
-    kind: 'Folder',
-    name: 'ai-research',
-    route: '/ai-research',
-    children: [
-      {
-        kind: 'MdxPage',
-        name: 'manus',
-        route: '/ai-research/manus',
-        frontMatter: { title: '🤖 Manus AI Research' },
-      },
-    ],
-  },
-]
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Try to load additional Keystatic docs and merge them into the sidebar.
