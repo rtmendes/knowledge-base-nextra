@@ -6,6 +6,14 @@ interface Message {
   content: string;
 }
 
+function extractErrorMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === 'object' && 'error' in payload) {
+    const error = (payload as { error?: unknown }).error;
+    if (typeof error === 'string' && error.trim()) return error;
+  }
+  return fallback;
+}
+
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,43 +28,70 @@ export function ChatWidget() {
   async function sendMessage() {
     const text = input.trim();
     if (!text || loading) return;
+
+    const nextMessages: Message[] = [...messages, { role: 'user', content: text }];
     setInput('');
-    setMessages(m => [...m, { role: 'user', content: text }]);
+    setMessages(nextMessages);
     setLoading(true);
 
     try {
-      const popebotUrl = process.env.NEXT_PUBLIC_POPEBOT_URL || 'https://thepopebot-production-e881.up.railway.app';
-      const apiKey = process.env.NEXT_PUBLIC_KB_CHAT_API_KEY || '';
-
-      const res = await fetch(`${popebotUrl}/api/claudeclaw/chat`, {
+      const res = await fetch('/api/kb/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({ message: text, agentId: 'main' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: nextMessages }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let payload: unknown = null;
+        try {
+          payload = await res.json();
+        } catch {
+          payload = null;
+        }
+        throw new Error(extractErrorMessage(payload, `Knowledge Base chat failed with HTTP ${res.status}`));
+      }
 
-      const reader = res.body!.getReader();
+      if (!res.body) throw new Error('Knowledge Base chat returned an empty response stream.');
+
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let botReply = '';
+      let sourceTitles: string[] = [];
+      let buffer = '';
+
+      function handleEvent(raw: string) {
+        const trimmed = raw.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) return;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') return;
+        try {
+          const data = JSON.parse(payload);
+          if (data.type === 'content' && typeof data.content === 'string') {
+            botReply += data.content;
+          }
+          if (data.type === 'sources' && Array.isArray(data.sources)) {
+            sourceTitles = data.sources
+              .map((source: { title?: unknown }) => (typeof source.title === 'string' ? source.title : ''))
+              .filter(Boolean)
+              .slice(0, 3);
+          }
+        } catch {
+          // Ignore malformed SSE chunks without failing the user's chat session.
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.text) botReply = data.text;
-          } catch {}
-        }
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        events.forEach(handleEvent);
       }
+      if (buffer) handleEvent(buffer);
 
-      setMessages(m => [...m, { role: 'assistant', content: botReply || 'No response received.' }]);
+      const sources = sourceTitles.length > 0 ? `\n\nSources: ${sourceTitles.join(', ')}` : '';
+      setMessages(m => [...m, { role: 'assistant', content: `${botReply.trim() || 'I could not find enough configured knowledge-base context to answer that yet.'}${sources}` }]);
     } catch (err: any) {
       setMessages(m => [...m, { role: 'assistant', content: `Error: ${err.message}` }]);
     } finally {
@@ -96,7 +131,7 @@ export function ChatWidget() {
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm leading-relaxed ${
+            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
               msg.role === 'user'
                 ? 'bg-amber-500 text-white rounded-br-sm'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm'

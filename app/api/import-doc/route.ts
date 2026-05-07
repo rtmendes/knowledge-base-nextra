@@ -3,10 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 /**
  * GET /api/import-doc — redirect to the import UI page
  */
-export async function GET() {
-  const base = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
+export async function GET(req: NextRequest) {
+  const base = process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : req.nextUrl.origin)
   return NextResponse.redirect(new URL('/import', base))
 }
 
