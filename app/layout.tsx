@@ -5,6 +5,7 @@ import { getNavTree, navTreeToPageMap } from '../lib/page-map'
 import { KBChatAssistant } from '../components/KBChatAssistant'
 import { AppShell } from '../components/AppShell'
 import { UserMenu } from '../components/UserMenu'
+import { InsightProfitEnterpriseShell } from '../components/InsightProfitEnterpriseShell'
 
 export const metadata = {
   metadataBase: new URL('https://knowledge-base-nextra.vercel.app'),
@@ -100,6 +101,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           {children}
         </Layout>
         <KBChatAssistant />
+          <InsightProfitEnterpriseShell appId="kb" />
         </AppShell>
       </body>
     </html>
