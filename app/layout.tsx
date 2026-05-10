@@ -26,6 +26,42 @@ export const metadata = {
   },
 }
 
+// ── Static pages that always appear in the sidebar ──────────────────────────
+// These are App Router MDX pages NOT managed by Keystatic, so we hardcode them.
+const STATIC_PAGE_MAP: any[] = [
+  {
+    kind: 'MdxPage',
+    name: 'index',
+    route: '/',
+    frontMatter: { title: 'Home' },
+  },
+  {
+    kind: 'MdxPage',
+    name: 'kb',
+    route: '/kb',
+    frontMatter: { title: '📚 Knowledge Base' },
+  },
+  {
+    kind: 'MdxPage',
+    name: 'genspark',
+    route: '/genspark',
+    frontMatter: { title: '⚡ Genspark Projects' },
+  },
+  {
+    kind: 'Folder',
+    name: 'ai-research',
+    route: '/ai-research',
+    children: [
+      {
+        kind: 'MdxPage',
+        name: 'manus',
+        route: '/ai-research/manus',
+        frontMatter: { title: '🤖 Manus AI Research' },
+      },
+    ],
+  },
+]
+
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Try to load additional Keystatic docs and merge them into the sidebar.
   // If Keystatic reader fails (no content yet, or reader error),
