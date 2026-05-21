@@ -1,53 +1,23 @@
-import { Layout, Navbar } from 'nextra-theme-docs'
 import './globals.css'
 import type { ReactNode } from 'react'
+import { Sidebar } from '../components/Sidebar'
 
 export const metadata = {
+  metadataBase: new URL('https://kb.insightprofit.live'),
   title: 'InsightProfit Knowledge Base',
   description: 'InsightProfit Knowledge Base Documentation',
 }
 
-// Minimal hardcoded page map
-const pageMap: any[] = [
-  {
-    kind: 'MdxPage',
-    name: 'index',
-    route: '/',
-    frontMatter: { title: 'Home' },
-  },
-  {
-    kind: 'MdxPage',
-    name: 'kb',
-    route: '/kb',
-    frontMatter: { title: '📚 Knowledge Base' },
-  },
-]
-
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
-        <Layout
-          navbar={
-            <Navbar
-              logo={
-                <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>
-                  InsightProfit KB
-                </span>
-              }
-            />
-          }
-          pageMap={pageMap}
-          docsRepositoryBase="https://github.com/rtmendes/knowledge-base-nextra"
-          editLink={null}
-          footer={
-            <div style={{ textAlign: 'center', padding: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-              © 2026 Insight Profit
-            </div>
-          }
-        >
-          {children}
-        </Layout>
+      <body className="bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <main className="flex-1 px-6 py-8 max-w-4xl mx-auto">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   )
