@@ -10,24 +10,31 @@ export type NavItem = {
 }
 
 /**
+ * Maximum number of child pages to include in a single sidebar folder.
+ * Folders that exceed this (e.g. genspark with 1181 pages) show only
+ * the first N entries — the rest are accessible via browse/search.
+ */
+const MAX_SIDEBAR_CHILDREN = 25
+
+/**
  * Builds the sidebar navigation tree from the Keystatic docs collection.
- * Skips genspark-imported placeholder pages to keep sidebar manageable.
+ * Large folders are capped at MAX_SIDEBAR_CHILDREN to prevent Nextra
+ * Layout from crashing on 1000+ sidebar entries.
  */
 export async function getNavTree(): Promise<NavItem[]> {
   const allDocs = await reader.collections.docs.all()
   console.log(`[keystatic] getNavTree: reader returned ${allDocs.length} docs`)
 
-  // Filter out genspark placeholder pages — they clog the sidebar
-  const docs = allDocs.filter((d) => !d.slug.startsWith('genspark/'))
-  console.log(`[keystatic] getNavTree: after filtering genspark: ${docs.length} docs`)
-
   const rootPages: NavItem[] = []
   const folders: Record<string, { index?: NavItem; children: NavItem[] }> = {}
 
-  for (const doc of docs) {
+  for (const doc of allDocs) {
+    // Skip docs with missing or invalid data
+    if (!doc.slug || !doc.entry?.title) continue
+
     const parts = doc.slug.split('/')
     const order = doc.entry.order ?? 100
-    const title = doc.entry.title
+    const title = String(doc.entry.title || doc.slug)
 
     if (parts.length === 1) {
       rootPages.push({
@@ -68,6 +75,8 @@ export async function getNavTree(): Promise<NavItem[]> {
   for (const page of rootPages) {
     if (folders[page.name]) {
       const folder = folders[page.name]
+      const sortedChildren = folder.children.sort((a, b) => a.order - b.order)
+      const cappedChildren = sortedChildren.slice(0, MAX_SIDEBAR_CHILDREN)
       result.push({
         name: page.name,
         route: page.route,
@@ -76,7 +85,7 @@ export async function getNavTree(): Promise<NavItem[]> {
         order: folder.index?.order ?? page.order,
         children: [
           ...(folder.index ? [folder.index] : []),
-          ...folder.children.sort((a, b) => a.order - b.order),
+          ...cappedChildren,
         ],
       })
       delete folders[page.name]
@@ -86,6 +95,8 @@ export async function getNavTree(): Promise<NavItem[]> {
   }
 
   for (const [folderName, folderData] of Object.entries(folders)) {
+    const sortedChildren = folderData.children.sort((a, b) => a.order - b.order)
+    const cappedChildren = sortedChildren.slice(0, MAX_SIDEBAR_CHILDREN)
     result.push({
       name: folderName,
       route: `/${folderName}`,
@@ -94,7 +105,7 @@ export async function getNavTree(): Promise<NavItem[]> {
       order: folderData.index?.order ?? 100,
       children: [
         ...(folderData.index ? [folderData.index] : []),
-        ...folderData.children.sort((a, b) => a.order - b.order),
+        ...cappedChildren,
       ],
     })
   }

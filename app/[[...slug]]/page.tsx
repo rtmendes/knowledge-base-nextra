@@ -7,13 +7,10 @@ interface Props {
   params: Promise<{ slug?: string[] }>
 }
 
+// Force SSR — never prerender doc pages. Avoids build crashes from
+// malformed Markdoc content across 1285+ imported Keystatic entries.
+export const dynamic = 'force-dynamic'
 export const dynamicParams = true
-
-export async function generateStaticParams() {
-  // Return empty — all pages render on-demand via dynamicParams=true.
-  // This avoids prerender crashes from malformed Markdoc content.
-  return []
-}
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params
