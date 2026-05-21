@@ -10,19 +10,9 @@ interface Props {
 export const dynamicParams = true
 
 export async function generateStaticParams() {
-  try {
-    const slugs = await reader.collections.docs.list()
-    console.log(`[keystatic] generateStaticParams: found ${slugs.length} doc slugs`)
-    // Skip genspark pages from static generation — they are placeholders
-    const filtered = slugs.filter((s) => !s.startsWith('genspark/'))
-    console.log(`[keystatic] After filtering genspark: ${filtered.length} pages to prerender`)
-    return filtered.map((slug) => ({
-      slug: slug === 'index' ? [] : slug.split('/'),
-    }))
-  } catch (err) {
-    console.error('[keystatic] generateStaticParams FAILED:', err)
-    return []
-  }
+  // Return empty — all pages render on-demand via dynamicParams=true.
+  // This avoids prerender crashes from malformed Markdoc content.
+  return []
 }
 
 export async function generateMetadata({ params }: Props) {
