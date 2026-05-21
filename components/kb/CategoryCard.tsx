@@ -65,9 +65,15 @@ interface Props {
   featured?: boolean
 }
 
+function getSafeImageSrc(src: string | undefined): string | null {
+  if (!src) return null
+  const trimmed = src.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 export function CategoryCard({ category, compact = false, featured = false }: Props) {
   const icon = getCategoryIcon(category.icon)
-  const coverImage = CATEGORY_COVERS[category.slug]
+  const coverImage = getSafeImageSrc(CATEGORY_COVERS[category.slug])
   const logos = TOOL_LOGOS[category.slug]
 
   if (compact) {

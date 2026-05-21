@@ -158,15 +158,65 @@ export async function getItems(opts: {
 
 export async function getItemById(id: string): Promise<KBItem | null> {
   if (!supabaseAdmin) return null
-  // Select specific columns to avoid serializing content_plain twice
-  // (content_plain duplicates content and bloats the RSC payload)
-  const { data, error } = await supabaseAdmin
+
+  const baseSelect =
+    'id, title, slug, item_type, category_id, parent_id, word_count, tags, status, metadata, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at, source_url'
+  const fullSelect = `${baseSelect}, content, content_plain`
+  const maxSSRContentSize = 400_000
+
+  const sanitizeLargeContent = (item: KBItem): KBItem => {
+    const contentLength = item.content?.length ?? 0
+    const plainLength = item.content_plain?.length ?? 0
+    const maxLength = Math.max(contentLength, plainLength)
+
+    if (maxLength <= maxSSRContentSize) return item
+
+    console.warn(`[kb] getItemById oversized content for ${id} (${maxLength} chars), truncating for SSR safety`)
+
+    const metadataBase =
+      item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? item.metadata
+        : {}
+
+    return {
+      ...item,
+      content: item.content ? item.content.slice(0, maxSSRContentSize) : item.content,
+      content_plain: item.content_plain ? item.content_plain.slice(0, maxSSRContentSize) : item.content_plain,
+      metadata: {
+        ...metadataBase,
+        content_truncated: true,
+        original_content_length: maxLength,
+      },
+    }
+  }
+
+  // Try full payload first so item pages still render rich content when size is safe.
+  const { data: fullData, error: fullError } = await supabaseAdmin
     .from('knowledge_items')
-    .select('id, title, slug, item_type, category_id, parent_id, content, word_count, tags, status, metadata, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at, source_url, content_plain')
+    .select(fullSelect)
     .eq('id', id)
-    .single()
-  if (error) { console.error('[kb] getItemById error:', error); return null }
-  return data
+    .maybeSingle()
+
+  if (!fullError && fullData) {
+    return sanitizeLargeContent(fullData as KBItem)
+  }
+
+  if (fullError) {
+    console.error('[kb] getItemById full query failed, retrying lightweight query:', fullError)
+  }
+
+  const { data: fallbackData, error: fallbackError } = await supabaseAdmin
+    .from('knowledge_items')
+    .select(baseSelect)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (fallbackError) {
+    console.error('[kb] getItemById lightweight fallback query failed:', fallbackError)
+    return null
+  }
+
+  return (fallbackData as KBItem | null) ?? null
 }
 
 export async function getItemsByCategory(categorySlug: string, opts?: {
