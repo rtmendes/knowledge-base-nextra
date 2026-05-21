@@ -29,6 +29,7 @@ const PUBLIC_ROUTES = [
   '/api/health',
   '/api/webhooks/',           // Vercel webhooks use HMAC, not Firebase
   '/api/auto-deploy',         // Cron-triggered, uses AGENT_API_KEY
+  '/api/debug-kb',             // Temporary debug endpoint
 ];
 
 // Routes that use AGENT_API_KEY instead of Firebase auth
