@@ -13,7 +13,10 @@ export async function generateStaticParams() {
   try {
     const slugs = await reader.collections.docs.list()
     console.log(`[keystatic] generateStaticParams: found ${slugs.length} doc slugs`)
-    return slugs.map((slug) => ({
+    // Skip genspark pages from static generation — they are placeholders
+    const filtered = slugs.filter((s) => !s.startsWith('genspark/'))
+    console.log(`[keystatic] After filtering genspark: ${filtered.length} pages to prerender`)
+    return filtered.map((slug) => ({
       slug: slug === 'index' ? [] : slug.split('/'),
     }))
   } catch (err) {
