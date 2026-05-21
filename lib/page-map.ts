@@ -11,23 +11,25 @@ export type NavItem = {
 
 /**
  * Builds the sidebar navigation tree from the Keystatic docs collection.
- * Top-level slugs like "insightprofit-popebot" become folders if sub-pages exist.
- * Sub-pages like "insightprofit-popebot/guide-to-ai-prompting" nest under them.
+ * Skips genspark-imported placeholder pages to keep sidebar manageable.
  */
 export async function getNavTree(): Promise<NavItem[]> {
   const allDocs = await reader.collections.docs.all()
   console.log(`[keystatic] getNavTree: reader returned ${allDocs.length} docs`)
 
+  // Filter out genspark placeholder pages — they clog the sidebar
+  const docs = allDocs.filter((d) => !d.slug.startsWith('genspark/'))
+  console.log(`[keystatic] getNavTree: after filtering genspark: ${docs.length} docs`)
+
   const rootPages: NavItem[] = []
   const folders: Record<string, { index?: NavItem; children: NavItem[] }> = {}
 
-  for (const doc of allDocs) {
+  for (const doc of docs) {
     const parts = doc.slug.split('/')
     const order = doc.entry.order ?? 100
     const title = doc.entry.title
 
     if (parts.length === 1) {
-      // Root-level page (no parent folder)
       rootPages.push({
         name: doc.slug,
         route: `/${doc.slug}`,
@@ -36,14 +38,12 @@ export async function getNavTree(): Promise<NavItem[]> {
         order,
       })
     } else {
-      // Nested page: first segment = folder
       const [folder] = parts
       const pageSlug = parts.slice(1).join('/')
 
       if (!folders[folder]) folders[folder] = { children: [] }
 
       if (pageSlug === 'index') {
-        // This is the index/landing page for the folder
         folders[folder].index = {
           name: 'index',
           route: `/${folder}`,
@@ -63,13 +63,10 @@ export async function getNavTree(): Promise<NavItem[]> {
     }
   }
 
-  // Merge root pages that also have sub-pages into folder nodes
   const result: NavItem[] = []
 
-  // Add pages that DON'T have a corresponding folder
   for (const page of rootPages) {
     if (folders[page.name]) {
-      // Promote to folder
       const folder = folders[page.name]
       result.push({
         name: page.name,
@@ -88,7 +85,6 @@ export async function getNavTree(): Promise<NavItem[]> {
     }
   }
 
-  // Add folders that have no matching root page (index only)
   for (const [folderName, folderData] of Object.entries(folders)) {
     result.push({
       name: folderName,
@@ -106,9 +102,6 @@ export async function getNavTree(): Promise<NavItem[]> {
   return result.sort((a, b) => a.order - b.order)
 }
 
-/**
- * Converts our NavTree into the Nextra PageMapItem format for the Layout component.
- */
 export function navTreeToPageMap(tree: NavItem[]): any[] {
   return tree.map((item) => {
     if (item.kind === 'Folder' && item.children) {
