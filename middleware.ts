@@ -300,5 +300,5 @@ export async function middleware(request: NextRequest) {
 
 // Only run middleware on API routes
 export const config = {
-  matcher: '/api/:path*',
+  matcher: '/api/admin/:path*',
 };

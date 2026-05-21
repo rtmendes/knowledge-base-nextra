@@ -1,15 +1,7 @@
-'use client';
+'use client'
+import type { ReactNode } from 'react'
 
-import { type ReactNode } from 'react';
-import { AuthProvider } from './AuthProvider';
-import { LoginGate } from './LoginGate';
-import { AuthFetchProvider } from './AuthFetchProvider';
-
+// Auth removed — AppShell is now a pass-through wrapper
 export function AppShell({ children }: { children: ReactNode }) {
-  return (
-    <AuthProvider>
-      <AuthFetchProvider />
-      <LoginGate>{children}</LoginGate>
-    </AuthProvider>
-  );
+  return <>{children}</>
 }
