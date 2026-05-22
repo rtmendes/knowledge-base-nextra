@@ -11,13 +11,6 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
-  // Don't fail build on prerender errors - serve pages on-demand instead
-  experimental: {
-    // In Next.js 15.5, this prevents the build from failing on prerender errors
-    // and instead serves those pages dynamically
-    missingSuspenseWithCSRBailout: false,
-  },
-
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'cdn.simpleicons.org' },

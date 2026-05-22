@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { getNavTree, type NavItem } from '../lib/page-map'
-import { getCategories, getTotalStats } from '../lib/supabase-kb'
-import { CategoryCard } from '../components/kb/CategoryCard'
+import { getNavTree, type NavItem } from '../../lib/page-map'
+import { getCategories, getTotalStats } from '../../lib/supabase-kb'
+import { CategoryCard } from '../../components/kb/CategoryCard'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 60
