@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
-import { reader } from '../../lib/keystatic'
-import { SafeDocRenderer } from '../../components/SafeDocRenderer'
-import { ShareBar } from '../../components/ShareBar'
+import { reader } from '../../../lib/keystatic'
+import { SafeDocRenderer } from '../../../components/SafeDocRenderer'
+import { ShareBar } from '../../../components/ShareBar'
 
 interface Props {
   params: Promise<{ slug?: string[] }>

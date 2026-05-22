@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { supabaseAdmin } from '../../../lib/supabase'
+import { supabaseAdmin } from '../../../../lib/supabase'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0

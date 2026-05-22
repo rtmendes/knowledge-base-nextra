@@ -1,11 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { getCategoryBySlug, getItems, getItemTypeCounts, getCategoryIcon } from '../../../lib/supabase-kb'
-import { ItemCard } from '../../../components/kb/ItemCard'
-import { SearchBar } from '../../../components/kb/SearchBar'
-import { TypeFilter } from '../../../components/kb/TypeFilter'
-import { Pagination } from '../../../components/kb/Pagination'
+import { getCategoryBySlug, getItems, getItemTypeCounts, getCategoryIcon } from '../../../../lib/supabase-kb'
+import { ItemCard } from '../../../../components/kb/ItemCard'
+import { SearchBar } from '../../../../components/kb/SearchBar'
+import { TypeFilter } from '../../../../components/kb/TypeFilter'
+import { Pagination } from '../../../../components/kb/Pagination'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
