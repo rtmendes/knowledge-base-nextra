@@ -262,6 +262,52 @@ export async function getItemTypeCounts(categoryId?: string): Promise<Record<str
   return counts
 }
 
+// ── Project / Parent-Child Queries ───────────────────────────────────────
+
+/**
+ * Fetch all items whose parent_id equals parentId (children of a project).
+ */
+export async function getItemChildren(parentId: string): Promise<KBItem[]> {
+  if (!supabaseAdmin) return []
+  const { data, error } = await supabaseAdmin
+    .from('knowledge_items')
+    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, metadata, created_at, updated_at')
+    .eq('parent_id', parentId)
+    .order('created_at', { ascending: true })
+  if (error) { console.error('[kb] getItemChildren error:', error); return [] }
+  return data || []
+}
+
+/**
+ * Fetch sibling items sharing the same parent_id, excluding the current item.
+ */
+export async function getItemSiblings(parentId: string, excludeId: string): Promise<KBItem[]> {
+  if (!supabaseAdmin) return []
+  const { data, error } = await supabaseAdmin
+    .from('knowledge_items')
+    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, metadata, created_at, updated_at')
+    .eq('parent_id', parentId)
+    .neq('id', excludeId)
+    .order('created_at', { ascending: true })
+    .limit(50)
+  if (error) { console.error('[kb] getItemSiblings error:', error); return [] }
+  return data || []
+}
+
+/**
+ * Lightweight parent item fetch (id, title, slug, item_type only).
+ */
+export async function getItemParent(parentId: string): Promise<Pick<KBItem, 'id' | 'title' | 'slug' | 'item_type'> | null> {
+  if (!supabaseAdmin) return null
+  const { data, error } = await supabaseAdmin
+    .from('knowledge_items')
+    .select('id, title, slug, item_type')
+    .eq('id', parentId)
+    .maybeSingle()
+  if (error) { console.error('[kb] getItemParent error:', error); return null }
+  return data
+}
+
 export async function getTotalStats(): Promise<{ totalItems: number; totalCategories: number; totalWithContent: number }> {
   if (!supabaseAdmin) return { totalItems: 0, totalCategories: 0, totalWithContent: 0 }
 

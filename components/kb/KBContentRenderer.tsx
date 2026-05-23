@@ -690,6 +690,56 @@ function parseBlocks(text: string): Block[] {
       }
     }
 
+    // ── Tab-Separated Values (TSV / spreadsheet imports) ──────────────
+    // Lines consistently delimited by real tab characters → render as table
+    if (trimmed.includes('\t')) {
+      const tsvLines: string[] = [line]
+      let j = i + 1
+      while (j < lines.length && lines[j].trim() !== '' && lines[j].includes('\t')) {
+        tsvLines.push(lines[j])
+        j++
+      }
+      if (tsvLines.length >= 2) {
+        const allRows = tsvLines.map(l => l.split('\t').map(c => c.trim()))
+        const maxCols = Math.max(...allRows.map(r => r.length))
+        const normalizedRows = allRows.map(r => {
+          const padded = [...r]
+          while (padded.length < maxCols) padded.push('')
+          return padded
+        })
+        const headers = normalizedRows[0]
+        const rows = normalizedRows.slice(1).filter(r => r.some(c => c.length > 0))
+        if (rows.length > 0 && headers.some(h => h.length > 0)) {
+          blocks.push({ type: 'table', headers, rows })
+          i = j
+          continue
+        }
+      }
+    }
+
+    // ── Key: Value pair detection ──────────────────────────────────────
+    // Lines like "Product Name: Widget A" repeated 3+ times → 2-column table
+    // Excludes URL-like patterns and very short values to reduce false positives
+    const kvMatch = trimmed.match(/^([A-Za-z][A-Za-z0-9 _.#@()/-]{0,45}):\s+(.{1,200})$/)
+    const isLikelyKV = kvMatch && !trimmed.startsWith('http') && !trimmed.startsWith('//') && !/^[A-Z]{1,3}:\/\//.test(trimmed)
+    if (isLikelyKV) {
+      const kvPairs: Array<[string, string]> = [[kvMatch![1], kvMatch![2]]]
+      let j = i + 1
+      while (j < lines.length) {
+        const nextTrimmed = lines[j].trim()
+        if (nextTrimmed === '') break
+        const nextKv = nextTrimmed.match(/^([A-Za-z][A-Za-z0-9 _.#@()/-]{0,45}):\s+(.{1,200})$/)
+        if (!nextKv) break
+        kvPairs.push([nextKv[1], nextKv[2]])
+        j++
+      }
+      if (kvPairs.length >= 3) {
+        blocks.push({ type: 'table', headers: ['Field', 'Value'], rows: kvPairs })
+        i = j
+        continue
+      }
+    }
+
     // Headings
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/)
     if (headingMatch) {

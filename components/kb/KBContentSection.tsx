@@ -1,8 +1,23 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { KBContentRenderer } from './KBContentRenderer'
+
+/**
+ * Heuristic: count structural HTML block elements in the first 10 KB.
+ * If there are 5+ and they outnumber markdown markers, treat content as HTML.
+ */
+function detectIsHtmlContent(content: string): boolean {
+  if (!content || content.length < 100) return false
+  const sample = content.slice(0, 10000)
+  const blockTags = sample.match(
+    /<(p|div|h[1-6]|ul|ol|table|section|article|header|footer|main|aside|figure|dl|dd|dt)\s*[^>]*>/gi
+  ) || []
+  if (blockTags.length < 5) return false
+  const mdMarkers = (sample.match(/^#{1,6}\s|\*\*[^*]+\*\*|^[-*]\s+\w|^\d+\.\s+\w|^```/gm) || []).length
+  return blockTags.length > mdMarkers
+}
 
 // Dynamically import editor to avoid SSR issues with BlockNote
 const KBContentEditor = dynamic(
@@ -141,6 +156,7 @@ export function KBContentSection({ itemId, content, contentPlain, itemType, meta
   )
 
   const displayContent = currentContent || contentPlain || ''
+  const isHtml = useMemo(() => detectIsHtmlContent(displayContent), [displayContent])
 
   return (
     <div>
@@ -276,7 +292,7 @@ export function KBContentSection({ itemId, content, contentPlain, itemType, meta
       {isEditing ? (
         <KBContentEditor content={displayContent} onChange={setEditContent} itemId={itemId} />
       ) : displayContent ? (
-        <KBContentRenderer content={displayContent} itemType={itemType} metadata={metadata} />
+        <KBContentRenderer content={displayContent} isHtml={isHtml} itemType={itemType} metadata={metadata} />
       ) : (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-8 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-900/20 mb-3">

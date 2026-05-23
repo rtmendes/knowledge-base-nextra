@@ -1,7 +1,14 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { getItemById, getItemTypeConfig, getCategoryIcon } from '../../../../../lib/supabase-kb'
+import {
+  getItemById,
+  getItemChildren,
+  getItemSiblings,
+  getItemParent,
+  getItemTypeConfig,
+  getCategoryIcon,
+} from '../../../../../lib/supabase-kb'
 import { ItemTypeBadge } from '../../../../../components/kb/ItemTypeBadge'
 import { KBContentSection } from '../../../../../components/kb/KBContentSection'
 import { ShareDownloadBar } from '../../../../../components/kb/ShareDownloadBar'
@@ -41,10 +48,28 @@ async function ItemContent({ params }: Props) {
   const item = await getItemById(id)
   if (!item) notFound()
 
-  const category = item.category_id ? await getCategoryById(item.category_id) : null
+  // Fetch related data in parallel
+  const [category, children, parent] = await Promise.all([
+    item.category_id ? getCategoryById(item.category_id) : Promise.resolve(null),
+    getItemChildren(item.id),
+    item.parent_id ? getItemParent(item.parent_id) : Promise.resolve(null),
+  ])
+
+  // Fetch siblings only if item has a parent (avoid extra query otherwise)
+  const siblings = (item.parent_id && parent)
+    ? await getItemSiblings(item.parent_id, item.id)
+    : []
+
   const catIcon = category ? getCategoryIcon(category.icon) : '📄'
   const tags = item.tags || []
   const sourceUrl = (item as any).source_url || item.metadata?.source_url || item.metadata?.url || item.metadata?.genspark_url || null
+
+  // Group children by type for the project overview panel
+  const childrenByType: Record<string, typeof children> = {}
+  for (const c of children) {
+    if (!childrenByType[c.item_type]) childrenByType[c.item_type] = []
+    childrenByType[c.item_type].push(c)
+  }
 
   // Format date
   const formatDate = (dateStr?: string) => {
@@ -71,6 +96,38 @@ async function ItemContent({ params }: Props) {
         <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
         <span className="text-gray-600 dark:text-gray-300 font-medium truncate max-w-[250px]">{item.title}</span>
       </nav>
+
+      {/* ── Part of Project banner ──────────────────────────────── */}
+      {parent && (
+        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-900/10 px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-amber-500 text-base flex-shrink-0">📁</span>
+            <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold flex-shrink-0">Part of project:</span>
+            <Link
+              href={`/kb/project/${parent.id}`}
+              className="text-sm font-medium text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 transition-colors truncate"
+            >
+              {parent.title}
+            </Link>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {siblings.length > 0 && (
+              <span className="text-xs text-amber-600/70 dark:text-amber-500/70 hidden sm:inline">
+                {siblings.length} related item{siblings.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            <Link
+              href={`/kb/project/${parent.id}`}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+            >
+              View all
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── Article Header ──────────────────────────────────────── */}
       <header className="mb-10 pb-8 border-b border-gray-200 dark:border-gray-800">
@@ -220,6 +277,120 @@ async function ItemContent({ params }: Props) {
         {/* ── Inline Databases (Notion-like) ──────────────────────── */}
         <ItemDatabasesSection itemId={item.id} />
       </article>
+
+      {/* ── Project Contents (if this item is a parent) ─────────── */}
+      {children.length > 0 && (
+        <div className="mb-10 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📁</span>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                Project Contents
+              </h2>
+              <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs font-bold text-gray-600 dark:text-gray-400">
+                {children.length}
+              </span>
+            </div>
+            <Link
+              href={`/kb/project/${item.id}`}
+              className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors flex items-center gap-1"
+            >
+              View full project
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {Object.entries(childrenByType).map(([type, items]) => {
+              const config = getItemTypeConfig(type)
+              return items.map(child => (
+                <Link
+                  key={child.id}
+                  href={`/kb/item/${child.id}`}
+                  className="group flex items-center gap-3 px-5 py-3 hover:bg-amber-50/50 dark:hover:bg-amber-900/10 transition-colors"
+                >
+                  <span className="text-base flex-shrink-0">{config.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors truncate block">
+                      {child.title}
+                    </span>
+                    {child.word_count > 0 && (
+                      <span className="text-xs text-gray-400 dark:text-gray-600">
+                        {child.word_count.toLocaleString()} words
+                      </span>
+                    )}
+                  </div>
+                  <span className={`flex-shrink-0 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold border ${config.bgColor} ${config.color}`}>
+                    {config.label}
+                  </span>
+                  <svg className="w-4 h-4 text-gray-300 dark:text-gray-700 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ))
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sibling Items ────────────────────────────────────────── */}
+      {siblings.length > 0 && (
+        <div className="mb-10 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🔗</span>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                Other Items in This Project
+              </h2>
+              <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs font-bold text-gray-600 dark:text-gray-400">
+                {siblings.length}
+              </span>
+            </div>
+            {parent && (
+              <Link
+                href={`/kb/project/${parent.id}`}
+                className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors flex items-center gap-1"
+              >
+                View project
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            )}
+          </div>
+          <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto">
+            {siblings.slice(0, 30).map(sibling => {
+              const config = getItemTypeConfig(sibling.item_type)
+              return (
+                <Link
+                  key={sibling.id}
+                  href={`/kb/item/${sibling.id}`}
+                  className="group flex items-center gap-3 px-5 py-3 hover:bg-amber-50/50 dark:hover:bg-amber-900/10 transition-colors"
+                >
+                  <span className="text-base flex-shrink-0">{config.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors truncate block">
+                      {sibling.title}
+                    </span>
+                    {sibling.word_count > 0 && (
+                      <span className="text-xs text-gray-400 dark:text-gray-600">
+                        {sibling.word_count.toLocaleString()} words
+                      </span>
+                    )}
+                  </div>
+                  <span className={`flex-shrink-0 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold border ${config.bgColor} ${config.color}`}>
+                    {config.label}
+                  </span>
+                  <svg className="w-4 h-4 text-gray-300 dark:text-gray-700 group-hover:text-amber-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Footer ──────────────────────────────────────────────── */}
       <div className="border-t border-gray-200 dark:border-gray-800 pt-6 pb-12">
