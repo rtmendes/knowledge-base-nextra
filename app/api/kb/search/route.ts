@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://supabase.insightprofit.live';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://supabase.insightprofit.live';
+// Prefer service role key (bypasses RLS); fall back to anon key for public KB reads
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  '';
 const EMBED_URL = process.env.EMBED_SERVICE_URL || 'https://embed.insightprofit.live';
 
 export async function POST(request: Request) {
