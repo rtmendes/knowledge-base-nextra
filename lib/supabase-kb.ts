@@ -35,7 +35,7 @@ export interface KBItem {
   bound_publications: string[]
   created_at?: string
   updated_at?: string
-  source_url?: string
+  // source_url is not a column — read from metadata?.source_url / metadata?.url instead
   category?: KBCategory
 }
 
@@ -159,8 +159,11 @@ export async function getItems(opts: {
 export async function getItemById(id: string): Promise<KBItem | null> {
   if (!supabaseAdmin) return null
 
+  // Only select columns that exist in knowledge_items.
+  // source_url is NOT a column — it lives inside the metadata JSONB object.
+  // The item page reads it via: item.metadata?.source_url || item.metadata?.url etc.
   const baseSelect =
-    'id, title, slug, item_type, category_id, parent_id, word_count, tags, status, metadata, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at, source_url'
+    'id, title, slug, item_type, category_id, parent_id, word_count, tags, status, metadata, summary, use_cases, bound_brands, bound_features, bound_publications, created_at, updated_at'
   const fullSelect = `${baseSelect}, content, content_plain`
   const maxSSRContentSize = 400_000
 
