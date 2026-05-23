@@ -1,26 +1,30 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Public fallbacks ensure the KB is readable even without env vars configured.
+// The anon key is intentionally public (used client-side by all browsers).
+const FALLBACK_URL = 'https://supabase.insightprofit.live'
+const FALLBACK_ANON =
+  'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzY2ODcxMjQ0LCJleHAiOjIwODIyMzEyNDR9.qtJF1pWQQr-SGHVYLv0wP4hMiamqfjrNsfsnBm-c2hI'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || FALLBACK_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || FALLBACK_ANON
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 /**
  * Client-side Supabase client (uses anon key, respects RLS).
- * Only created if env vars are set.
  */
-export const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 /**
- * Server-side Supabase client (uses service role key, bypasses RLS).
+ * Server-side Supabase client.
+ * Uses service role key when available (bypasses RLS, full access).
+ * Falls back to anon key for public-read tables (knowledge_items, kb_categories).
  * Only for use in API routes / server components.
  */
-export const supabaseAdmin =
-  supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey)
-    : null
+export const supabaseAdmin = createClient(
+  supabaseUrl,
+  supabaseServiceKey || supabaseAnonKey
+)
 
 /**
  * Upload a file buffer to Supabase Storage.
