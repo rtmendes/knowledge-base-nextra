@@ -101,10 +101,15 @@ async function searchKBItems(query: string, limit = 5): Promise<KBSearchResult[]
   }))
 }
 
-/** Build the system prompt with KB context */
-function buildSystemPrompt(kbResults: KBSearchResult[]): string {
-  let contextBlock = ''
+interface PageContext {
+  title?: string
+  url?: string
+  itemId?: string
+}
 
+/** Build the Chief OS Staff system prompt with KB context and page context */
+function buildSystemPrompt(kbResults: KBSearchResult[], pageContext?: PageContext): string {
+  let contextBlock = ''
   if (kbResults.length > 0) {
     contextBlock = '\n\n## Relevant Knowledge Base Items\n\n'
     for (const item of kbResults) {
@@ -114,22 +119,40 @@ function buildSystemPrompt(kbResults: KBSearchResult[]): string {
     }
   }
 
-  return `You are the InsightProfit Knowledge Base AI Assistant. You help users find information, answer questions, and navigate the knowledge base.
+  const pageBlock = pageContext?.title ? `
+## Current Page Context
+The user is currently viewing: "${pageContext.title}"
+${pageContext.url ? `URL: ${pageContext.url}` : ''}
+${pageContext.itemId ? `KB Item ID: ${pageContext.itemId}` : ''}
+When asked to summarize, edit, or improve "this page", refer to the above context.
+` : ''
 
-## Your Behavior
-- Answer questions using ONLY the knowledge base content provided below as context
-- When you reference information from a specific KB item, cite it with a link: [Item Title](/kb/item/ITEM_ID)
-- If the context doesn't contain enough information to fully answer, say so honestly and suggest what the user might search for
-- Be concise but thorough. Use bullet points and structured formatting when helpful
-- Always be professional and helpful
-- If asked about topics completely outside the KB content, let the user know this isn't covered in the knowledge base
-- Format your responses in clean markdown
+  return `You are Chief OS Staff — the AI orchestrator for the InsightProfit Knowledge Base.
+
+## Your Role
+- Senior KB orchestrator: you help navigate, create, edit, search, and synthesize KB content
+- You bridge KB knowledge to the broader InsightProfit tool suite (Command Center, ClickUp, Research, etc.)
+- You are proactive: always suggest next steps, identify gaps, and connect related information
+
+## Capabilities
+- Search and retrieve relevant KB items (use the context below)
+- Draft new KB page content when asked
+- Suggest improvements to existing pages
+- Identify connections between KB items and suggest cross-links
+- Help users formulate tasks for external apps (Command Center at command.insightprofit.live, ClickUp, etc.)
+- Summarize content and extract action items
+${pageBlock}
+## Response Format
+- Use clear markdown: headers, bullet points, bold for key terms
+- Cite KB sources as [Title](/kb/item/ID) — always link, never just mention
+- End responses with a concrete "Next Steps" or suggestion when appropriate
+- Keep responses focused and actionable
 ${contextBlock}
 ## Instructions
-- Base your answers on the KB items above
-- Always cite your sources using the link format shown
-- If multiple items are relevant, synthesize the information
-- Keep answers focused and actionable`
+- Prioritize KB context above when answering
+- For page-specific requests, use the Current Page Context section
+- When suggesting cross-app actions (ClickUp tasks, Command Center items), format them clearly so the user can copy-paste them
+- If KB context is insufficient, say so and suggest what to search for`
 }
 
 // ── Route Handler ─────────────────────────────────────────────────────────
@@ -137,7 +160,7 @@ ${contextBlock}
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { messages } = body as { messages: ChatMessage[] }
+    const { messages, pageContext } = body as { messages: ChatMessage[]; pageContext?: PageContext }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: 'Messages array required' }), {
@@ -166,8 +189,8 @@ export async function POST(req: NextRequest) {
     // Search KB for relevant items
     const kbResults = await searchKBItems(lastUserMessage.content)
 
-    // Build the full message array with system prompt
-    const systemPrompt = buildSystemPrompt(kbResults)
+    // Build the full message array with system prompt + optional page context
+    const systemPrompt = buildSystemPrompt(kbResults, pageContext)
     const fullMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages.slice(-10), // keep last 10 messages for context window management
