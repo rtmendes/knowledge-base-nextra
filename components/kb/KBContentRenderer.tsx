@@ -86,8 +86,13 @@ function sanitizeHtml(html: string): string {
   return html
     // Remove all on* event handler attributes (onclick, onload, onerror, …)
     .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
-    // Replace javascript: hrefs/srcs with a safe anchor
-    .replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi, '$1="#"')
+    // Replace javascript: hrefs/srcs with a safe anchor.
+    // \s* after opening quotes handles leading whitespace inside the value
+    //   (browsers accept href="  javascript:..." as valid):
+    //   "\s*javascript:…"  →  double-quoted (eats both " delimiters)
+    //   '\s*javascript:…'  →  single-quoted (eats both ' delimiters)
+    //   javascript:…       →  unquoted      (stops at whitespace or >)
+    .replace(/(href|src)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s>]*)/gi, '$1="#"')
     // Drop inline <script> blocks entirely
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
 }
@@ -285,7 +290,7 @@ function InteractiveHtmlRenderer({ content }: { content: string }) {
         <iframe
           src={blobUrl}
           className="w-full h-full"
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           title="Interactive content preview"
           loading="lazy"
         />
@@ -399,6 +404,172 @@ function GensparkSourceCard({ metadata, title }: { metadata: Record<string, any>
   )
 }
 
+// ── Manus Task Types ──────────────────────────────────────────────────────
+interface ManusEntry {
+  id: string; role: string; type: string
+  texts: string[]; hasThinking: boolean; hasToolUse: boolean
+}
+
+function isManusContent(content: string): boolean {
+  const s = content.slice(0, 600)
+  return s.includes("[{'id':") || s.includes('[{"id":')
+}
+
+function unescapePython(s: string): string {
+  return s.replace(/\\'/g, "'").replace(/\\"/g, '"')
+    .replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r').replace(/\\\\/g, '\\')
+}
+
+function parseManusTaskContent(raw: string): { header: string; entries: ManusEntry[] } {
+  const idx1 = raw.indexOf("[{'id':")
+  const idx2 = raw.indexOf('[{"id":')
+  const listIdx = idx1 === -1 ? idx2 : idx2 === -1 ? idx1 : Math.min(idx1, idx2)
+  if (listIdx === -1) return { header: raw, entries: [] }
+
+  const header = raw.slice(0, listIdx).trim()
+  const listStr = raw.slice(listIdx)
+
+  // Collect start positions of each top-level entry using matchAll
+  const boundaries: number[] = Array.from(
+    listStr.matchAll(/\{'id':|{"id":/g),
+    m => m.index!
+  )
+  if (boundaries.length === 0) return { header, entries: [] }
+
+  const entries: ManusEntry[] = []
+  for (let i = 0; i < boundaries.length; i++) {
+    const chunk = listStr.slice(boundaries[i], i + 1 < boundaries.length ? boundaries[i + 1] : listStr.length)
+
+    const idM   = chunk.match(/['"]id['"]\s*:\s*['"]([^'"]+)['"]/)
+    const roleM = chunk.match(/['"]role['"]\s*:\s*['"](\w+)['"]/)
+    const typeM = chunk.match(/['"]type['"]\s*:\s*['"](\w+)['"]/)
+
+    const texts: string[] = []
+    for (const m of chunk.matchAll(/'text'\s*:\s*'((?:[^'\\]|\\.)*)'/g)) {
+      const t = unescapePython(m[1]).trim()
+      if (t.length > 3) texts.push(t)
+    }
+    for (const m of chunk.matchAll(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g)) {
+      const t = unescapePython(m[1]).trim()
+      if (t.length > 3) texts.push(t)
+    }
+
+    entries.push({
+      id: idM ? idM[1] : `e${i}`,
+      role: roleM ? roleM[1] : 'unknown',
+      type: typeM ? typeM[1] : 'message',
+      texts,
+      hasThinking: chunk.includes("'thinking'") || chunk.includes('"thinking"'),
+      hasToolUse:  chunk.includes("'tool_use'") || chunk.includes("'tool_result'"),
+    })
+  }
+  return { header, entries }
+}
+
+// ── Manus Step Card ───────────────────────────────────────────────────────
+function ManusStepCard({ entry, index }: { entry: ManusEntry; index: number }) {
+  const [open, setOpen] = useState(false)
+  const preview = (entry.texts[0] || '').slice(0, 110)
+  const label = entry.hasThinking ? '💭 Thinking' : entry.hasToolUse ? '🔧 Tool Action' : '⚙️ Processing'
+
+  return (
+    <div className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+      >
+        <span className="text-[10px] font-mono text-gray-400 dark:text-gray-600 shrink-0 w-12">Step {index + 1}</span>
+        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-500 shrink-0">{label}</span>
+        <span className="text-[11px] text-gray-400 dark:text-gray-600 truncate flex-1">{preview}</span>
+        <svg className={`w-3 h-3 text-gray-300 dark:text-gray-600 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && entry.texts.length > 0 && (
+        <div className="px-4 pb-3 text-xs font-mono text-gray-600 dark:text-gray-400 whitespace-pre-wrap max-h-72 overflow-y-auto leading-5 bg-gray-50/50 dark:bg-gray-900/30">
+          {entry.texts.join('\n\n')}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Manus Task Renderer ───────────────────────────────────────────────────
+function ManusTaskRenderer({ content }: { content: string }) {
+  const { header, entries } = useMemo(() => parseManusTaskContent(content), [content])
+  const [showSteps, setShowSteps] = useState(false)
+
+  if (entries.length === 0) return <MarkdownRenderer text={content} />
+
+  const userRequest = entries.find(e => e.role === 'user')
+  const assistantEntries = entries.filter(e => e.role !== 'user')
+
+  let finalOutputIdx = -1
+  for (let i = assistantEntries.length - 1; i >= 0; i--) {
+    if (assistantEntries[i].texts.some(t => t.length > 80)) { finalOutputIdx = i; break }
+  }
+  const finalOutput = finalOutputIdx !== -1 ? assistantEntries[finalOutputIdx] : null
+  const stepEntries = assistantEntries.filter((_, i) => i !== finalOutputIdx)
+
+  return (
+    <div className="space-y-6">
+      {header && <MarkdownRenderer text={header} />}
+
+      {userRequest && userRequest.texts.length > 0 && (
+        <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-gradient-to-br from-violet-50 to-purple-50/40 dark:from-violet-950/20 dark:to-purple-950/10 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base">🎯</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">Original Task Request</span>
+          </div>
+          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+            {userRequest.texts.join('\n')}
+          </p>
+        </div>
+      )}
+
+      {stepEntries.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <button
+            onClick={() => setShowSteps(s => !s)}
+            className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10" />
+              </svg>
+              {stepEntries.length} Agent Processing Steps
+              <span className="text-xs text-gray-400 dark:text-gray-500 font-normal ml-1">(click to {showSteps ? 'collapse' : 'expand'})</span>
+            </span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showSteps ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showSteps && (
+            <div>
+              {stepEntries.map((entry, i) => (
+                <ManusStepCard key={entry.id} entry={entry} index={i} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {finalOutput && finalOutput.texts.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/40 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 bg-emerald-50 dark:bg-emerald-900/10 border-b border-emerald-200 dark:border-emerald-800/40">
+            <span className="text-base">📋</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Final Output</span>
+          </div>
+          <div className="p-5">
+            <MarkdownRenderer text={finalOutput.texts.join('\n\n')} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function KBContentRenderer({ content, isHtml, itemType, metadata }: Props) {
   if (!content) return null
 
@@ -423,6 +594,11 @@ export function KBContentRenderer({ content, isHtml, itemType, metadata }: Props
   }, [cleaned, isHtml])
   const showToc = toc.length >= 3 && cleaned.length > 2000
   const wordCount = useMemo(() => countWords(cleaned), [cleaned])
+
+  // ── Manus Task format ──────────────────────────────────────────────────
+  if (itemType === 'manus_task' || isManusContent(cleaned)) {
+    return <ManusTaskRenderer content={cleaned} />
+  }
 
   // ── Interactive HTML pages (Genspark spark pages, etc.) ──
   if (format === 'html-interactive') {

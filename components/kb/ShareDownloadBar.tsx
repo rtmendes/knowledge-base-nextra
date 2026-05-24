@@ -7,9 +7,10 @@ interface Props {
   title: string
   content: string
   itemType?: string
+  sourceUrl?: string | null
 }
 
-export function ShareDownloadBar({ itemId, title, content, itemType }: Props) {
+export function ShareDownloadBar({ itemId, title, content, itemType, sourceUrl }: Props) {
   const [copied, setCopied] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -165,6 +166,22 @@ ${htmlContent}
         </svg>
         Open
       </button>
+
+      {/* Open original source — only shown when a source URL is available */}
+      {sourceUrl && (
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:border-emerald-300 dark:hover:border-emerald-600 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all"
+          title={`Open original source: ${sourceUrl}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          Source
+        </a>
+      )}
 
       {/* Download dropdown */}
       <div className="relative" ref={dropdownRef}>

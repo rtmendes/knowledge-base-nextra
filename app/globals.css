@@ -12,6 +12,22 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ── Dark-mode base colours ──────────────────────────────────── */
+/* next-themes adds the "dark" class to <html>; these rules set the
+   correct page background and text colour so every un-themed surface
+   (body, layout wrappers that don't specify a bg) is readable.     */
+
+html.dark,
+html.dark body {
+  background-color: #0a0a0f;
+  color: #f8fafc;
+}
+
+html:not(.dark) body {
+  background-color: #f9fafb;
+  color: #111827;
+}
+
 /* ── KB Content Rendering ─────────────────────────────────────── */
 
 @layer components {
@@ -1058,4 +1074,186 @@ html {
 .dark .kb-inline-database input:focus,
 .dark .kb-inline-database select:focus {
   background-color: rgba(245, 158, 11, 0.05);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Chief OS Staff — Persistent Right-Edge Tab + Slide-In Panel
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Vertical tab always visible on right edge */
+.kb-chief-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 99998;
+  background: linear-gradient(180deg, #7c3aed 0%, #5b21b6 100%);
+  color: white;
+  border: none;
+  border-radius: 10px 0 0 10px;
+  cursor: pointer;
+  padding: 20px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: -3px 0 24px rgba(109,40,217,0.4), -1px 0 8px rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+}
+.kb-chief-tab:hover {
+  background: linear-gradient(180deg, #6d28d9 0%, #4c1d95 100%);
+  box-shadow: -5px 0 32px rgba(109,40,217,0.55), -2px 0 12px rgba(0,0,0,0.25);
+}
+.kb-chief-tab-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255,255,255,0.9);
+}
+
+/* Slide-in side panel */
+.kb-chief-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  z-index: 99997;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -8px 0 60px rgba(0,0,0,0.12), -2px 0 20px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+.kb-chief-panel.open {
+  transform: translateX(0);
+}
+:is(.dark) .kb-chief-panel {
+  background: #0f1117;
+  border-color: #1f2937;
+  box-shadow: -8px 0 60px rgba(0,0,0,0.45), -2px 0 20px rgba(0,0,0,0.25);
+}
+
+/* Panel header — purple gradient */
+.kb-chief-header {
+  padding: 0.875rem 1rem;
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.kb-chief-avatar {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.kb-chief-header-btn {
+  background: rgba(255,255,255,0.12);
+  border: none; color: white;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 0.15s;
+}
+.kb-chief-header-btn:hover { background: rgba(255,255,255,0.22); }
+
+/* Page context strip */
+.kb-chief-context {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  background: rgba(109,40,217,0.06);
+  border-bottom: 1px solid rgba(109,40,217,0.12);
+  flex-shrink: 0;
+  min-width: 0;
+}
+:is(.dark) .kb-chief-context {
+  background: rgba(109,40,217,0.1);
+  border-color: rgba(109,40,217,0.2);
+}
+.kb-chief-context-title {
+  font-size: 11px; color: #7c3aed; flex: 1; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+:is(.dark) .kb-chief-context-title { color: #a78bfa; }
+.kb-chief-context-link {
+  font-size: 10px; color: #7c3aed; white-space: nowrap;
+  text-decoration: none; flex-shrink: 0; transition: color 0.15s;
+}
+.kb-chief-context-link:hover { color: #5b21b6; }
+:is(.dark) .kb-chief-context-link { color: #a78bfa; }
+
+/* Quick tools section */
+.kb-chief-tools {
+  padding: 10px 12px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+}
+:is(.dark) .kb-chief-tools { border-color: #1f2937; }
+.kb-chief-tools-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 7px;
+}
+.kb-chief-tools-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  margin-bottom: 8px;
+}
+.kb-chief-tool-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  font-size: 11px; font-weight: 600; color: #4b5563;
+  cursor: pointer; transition: all 0.15s; text-align: left;
+}
+.kb-chief-tool-btn:hover {
+  background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6;
+}
+:is(.dark) .kb-chief-tool-btn {
+  background: #1f2937; border-color: #374151; color: #9ca3af;
+}
+:is(.dark) .kb-chief-tool-btn:hover {
+  background: rgba(109,40,217,0.15); border-color: #7c3aed; color: #c4b5fd;
+}
+
+/* Cross-app shortcut pills */
+.kb-chief-apps {
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.kb-chief-app-link {
+  font-size: 10px; font-weight: 600;
+  padding: 3px 8px; border-radius: 6px;
+  background: #f3f4f6; color: #6b7280;
+  text-decoration: none; transition: all 0.15s;
+}
+.kb-chief-app-link:hover { background: #ede9fe; color: #6d28d9; }
+:is(.dark) .kb-chief-app-link { background: #1f2937; color: #6b7280; }
+:is(.dark) .kb-chief-app-link:hover { background: rgba(109,40,217,0.15); color: #a78bfa; }
+
+/* Bot icon in message list */
+.kb-chief-bot-icon {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; flex-shrink: 0; align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* Mobile: panel goes full-width, tab shifts */
+@media (max-width: 480px) {
+  .kb-chief-panel { width: 100vw; max-width: 100vw; }
+  .kb-chief-tab { padding: 14px 7px; }
+  .kb-chief-tab-label { font-size: 9px; }
 }
