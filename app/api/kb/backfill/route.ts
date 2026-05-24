@@ -27,12 +27,15 @@ const HEADERS = {
   Prefer: 'return=minimal',
 }
 
-// Phrases that appear in Cloudflare bot-challenge pages
+// Phrases that appear exclusively in Cloudflare bot-challenge pages.
+// Use specific multi-word phrases to avoid false positives in legitimate content
+// (e.g. "security verification" appears naturally in TikTok setup guides).
 const BOT_BLOCK_SIGNALS = [
-  'security verification',
-  'verifying you are not a bot',
   'cloudflare ray id',
+  'verifying you are not a bot',
   'please wait while we verify',
+  'enable javascript and cookies to continue',
+  'ddos-guard',
 ]
 
 function isBotBlocked(contentPlain: string): boolean {
