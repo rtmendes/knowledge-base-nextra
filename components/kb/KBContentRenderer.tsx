@@ -86,8 +86,13 @@ function sanitizeHtml(html: string): string {
   return html
     // Remove all on* event handler attributes (onclick, onload, onerror, …)
     .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
-    // Replace javascript: hrefs/srcs with a safe anchor
-    .replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi, '$1="#"')
+    // Replace javascript: hrefs/srcs with a safe anchor.
+    // Three alternates handle all quoting styles and consume the closing
+    // delimiter so no dangling quote is left in the output:
+    //   "javascript:…"  →  double-quoted (eats both " delimiters)
+    //   'javascript:…'  →  single-quoted (eats both ' delimiters)
+    //   javascript:…    →  unquoted      (stops at whitespace or >)
+    .replace(/(href|src)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]*)/gi, '$1="#"')
     // Drop inline <script> blocks entirely
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
 }
