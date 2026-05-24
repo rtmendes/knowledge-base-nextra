@@ -113,7 +113,7 @@ function HtmlIframeViewer({ content }: { content: string }) {
         <iframe
           src={blobUrl}
           className="w-full h-full bg-white"
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           title="Rendered HTML content"
           loading="lazy"
         />
