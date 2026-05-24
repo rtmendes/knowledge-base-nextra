@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
+import { useTheme } from 'next-themes'
 import { KBSidebar } from './KBSidebar'
 import { CommandPalette } from './CommandPalette'
 import { CreateItemModal } from './CreateItemModal'
@@ -28,6 +29,11 @@ interface KBWorkspaceLayoutProps {
 
 export function KBWorkspaceLayout({ categories: initialCategories, children, rightPanel }: KBWorkspaceLayoutProps) {
   const pathname = usePathname()
+  const { resolvedTheme, setTheme } = useTheme()
+  // Track mount state so we don't render the wrong icon during SSR
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const [categories, setCategories] = useState(initialCategories)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
@@ -197,6 +203,30 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
             </svg>
             <span className="hidden sm:inline">{selectionMode ? `${selectedIds.size} selected` : 'Select'}</span>
           </button>
+
+          {/* Dark / light mode toggle */}
+          {mounted && (
+            <button
+              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {resolvedTheme === 'dark' ? (
+                /* Sun icon — visible in dark mode, click to go light */
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                </svg>
+              ) : (
+                /* Moon icon — visible in light mode, click to go dark */
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              )}
+            </button>
+          )}
 
           {/* Create button */}
           <button
