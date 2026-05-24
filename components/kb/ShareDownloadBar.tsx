@@ -14,6 +14,14 @@ export function ShareDownloadBar({ itemId, title, content, itemType }: Props) {
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Initialise with a relative URL so SSR and first client render match,
+  // then update to the full absolute URL after hydration. This eliminates
+  // the SSR/client mismatch that was triggering the hydration error boundary.
+  const [shareUrl, setShareUrl] = useState(`/kb/item/${itemId}`)
+  useEffect(() => {
+    setShareUrl(`${window.location.origin}/kb/item/${itemId}`)
+  }, [itemId])
+
   // Close dropdown on click outside
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -24,10 +32,6 @@ export function ShareDownloadBar({ itemId, title, content, itemType }: Props) {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
-
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/kb/item/${itemId}`
-    : `/kb/item/${itemId}`
 
   const handleCopyLink = async () => {
     try {

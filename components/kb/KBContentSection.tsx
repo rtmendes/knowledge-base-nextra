@@ -6,7 +6,10 @@ import { KBContentRenderer } from './KBContentRenderer'
 
 /**
  * Heuristic: count structural HTML block elements in the first 10 KB.
- * If there are 5+ and they outnumber markdown markers, treat content as HTML.
+ * Requires 10+ block tags outnumbering markdown markers before treating
+ * content as rich HTML. The higher threshold (up from 5) reduces false
+ * positives and keeps the inline-HTML path limited to clearly HTML-native
+ * content. The renderer applies a sanitisation pass on the resulting HTML.
  */
 function detectIsHtmlContent(content: string): boolean {
   if (!content || content.length < 100) return false
@@ -14,7 +17,7 @@ function detectIsHtmlContent(content: string): boolean {
   const blockTags = sample.match(
     /<(p|div|h[1-6]|ul|ol|table|section|article|header|footer|main|aside|figure|dl|dd|dt)\s*[^>]*>/gi
   ) || []
-  if (blockTags.length < 5) return false
+  if (blockTags.length < 10) return false
   const mdMarkers = (sample.match(/^#{1,6}\s|\*\*[^*]+\*\*|^[-*]\s+\w|^\d+\.\s+\w|^```/gm) || []).length
   return blockTags.length > mdMarkers
 }
