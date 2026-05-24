@@ -17,6 +17,25 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, '')
 }
 
+// Single-word structural labels that appear as headings in AI-generated content
+// (e.g. "## user", "### assistant", "## type") but carry no navigational value
+const NOISE_HEADING_WORDS = new Set([
+  'user', 'assistant', 'system', 'admin', 'role', 'type', 'id', 'name',
+  'api', 'get', 'set', 'post', 'put', 'delete', 'patch', 'data', 'text',
+  'note', 'tip', 'info', 'warning', 'error', 'output', 'input', 'result',
+  'response', 'request', 'content', 'message', 'example', 'sample',
+])
+
+function isNoisyHeading(text: string): boolean {
+  const trimmed = text.trim()
+  // Skip very short headings (single chars, empty after trim)
+  if (trimmed.length < 3) return true
+  // Skip single-word structural labels
+  const words = trimmed.split(/\s+/)
+  if (words.length === 1 && NOISE_HEADING_WORDS.has(words[0].toLowerCase())) return true
+  return false
+}
+
 export function ItemPageToC({ content }: { content: string }) {
   const [headings, setHeadings] = useState<TOCHeading[]>([])
   const [activeId, setActiveId] = useState('')
@@ -26,27 +45,32 @@ export function ItemPageToC({ content }: { content: string }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       const extracted: TOCHeading[] = []
-      const contentArea = document.querySelector('.kb-content-area, .kb-html-content, .kb-prose, article')
+      // Prefer the scoped data attribute added to the article in page.tsx;
+      // fall back to well-known class names and finally the generic article tag.
+      const contentArea = document.querySelector(
+        '[data-kb-content], .kb-content-area, .kb-html-content, .kb-prose, article'
+      )
       if (contentArea) {
         contentArea.querySelectorAll('h1, h2, h3, h4').forEach((el, index) => {
           const text = el.textContent?.trim() || ''
-          if (!text) return
+          if (!text || isNoisyHeading(text)) return
           if (!el.id) el.id = slugify(text) || `heading-${index}`
           extracted.push({ id: el.id, text, level: parseInt(el.tagName.charAt(1)) })
         })
       }
       if (extracted.length === 0 && content) {
-        const htmlRegex = /<h([1-4])[^>]*(?:id="([^"]*)")?[^>]*>([\s\S]*?)<\/h[1-4]>/gi
-        let match
-        while ((match = htmlRegex.exec(content)) !== null) {
+        for (const match of content.matchAll(/<h([1-4])[^>]*(?:id="([^"]*)")?[^>]*>([\s\S]*?)<\/h[1-4]>/gi)) {
           const text = match[3].replace(/<[^>]+>/g, '').trim()
-          if (text) extracted.push({ id: match[2] || slugify(text), text, level: parseInt(match[1]) })
+          if (text && !isNoisyHeading(text)) {
+            extracted.push({ id: match[2] || slugify(text), text, level: parseInt(match[1]) })
+          }
         }
         if (extracted.length === 0) {
-          const mdRegex = /^(#{1,4})\s+(.+)$/gm
-          while ((match = mdRegex.exec(content)) !== null) {
+          for (const match of content.matchAll(/^(#{1,4})\s+(.+)$/gm)) {
             const text = match[2].replace(/\*\*|__|\*|_|`/g, '').trim()
-            if (text) extracted.push({ id: slugify(text), text, level: match[1].length })
+            if (text && !isNoisyHeading(text)) {
+              extracted.push({ id: slugify(text), text, level: match[1].length })
+            }
           }
         }
       }

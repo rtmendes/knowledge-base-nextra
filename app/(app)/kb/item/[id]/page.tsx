@@ -256,7 +256,7 @@ async function ItemContent({ params }: Props) {
       )}
 
       {/* ── Content (with WYSIWYG editor) ───────────────────────── */}
-      <article className="pb-8">
+      <article className="pb-8" data-kb-content="true">
         <KBContentSection
           itemId={item.id}
           content={item.content || item.content_plain || ''}
