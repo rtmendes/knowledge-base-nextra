@@ -74,16 +74,24 @@ async function searchKBItems(query: string, limit = 5): Promise<KBSearchResult[]
 
   if (!data || data.length === 0) return []
 
-  // Re-rank by keyword hit density
+  // Re-rank by keyword hit density.
+  // Scan the full content (not a truncated slice) so mentions near the end of
+  // long articles count toward the score — previously 5 000 chars caused
+  // items with keyword matches only after that offset to be ranked poorly.
   const ranked = data.map(item => {
     const titleLower = (item.title || '').toLowerCase()
-    const contentLower = (item.content_plain || '').toLowerCase().slice(0, 5000)
+    const contentLower = (item.content_plain || '').toLowerCase()
     let score = 0
     for (const kw of keywords) {
-      if (titleLower.includes(kw)) score += 3 // title match worth more
-      if (contentLower.includes(kw)) score += 1
+      // Count all occurrences rather than just checking for existence
+      const titleCount = (titleLower.match(new RegExp(kw, 'g')) || []).length
+      const contentCount = Math.min(
+        (contentLower.match(new RegExp(kw, 'g')) || []).length,
+        20  // cap contribution per keyword to avoid one word dominating
+      )
+      score += titleCount * 3 + contentCount
     }
-    // Boost items with actual content
+    // Boost items with substantial content
     if (item.word_count > 500) score += 1
     if (item.word_count > 2000) score += 1
     return { ...item, score }
@@ -95,7 +103,10 @@ async function searchKBItems(query: string, limit = 5): Promise<KBSearchResult[]
     id: item.id,
     title: item.title,
     item_type: item.item_type,
-    content_plain: (item.content_plain || '').slice(0, 3000), // cap per-item context
+    // Provide up to 6 000 chars of context per item to the LLM.
+    // Long articles like Genspark chats typically need more than 3 000 chars
+    // to capture all the relevant content around keyword mentions.
+    content_plain: (item.content_plain || '').slice(0, 6000),
     tags: item.tags || [],
     word_count: item.word_count,
   }))

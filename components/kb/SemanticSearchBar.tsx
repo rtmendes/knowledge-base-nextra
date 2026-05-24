@@ -13,6 +13,7 @@ interface SearchResult {
   word_count: number
   similarity: number | null
   preview: string
+  match_type?: 'semantic' | 'keyword' | 'hybrid'
 }
 
 interface Props {
@@ -163,7 +164,11 @@ export function SemanticSearchBar({ basePath, placeholder = 'AI-powered search�
         <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl max-h-[420px] overflow-y-auto">
           <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {searchType === 'semantic' ? '🔮 AI Semantic Results' : '📝 Text Results'}
+              {searchType === 'hybrid'
+                ? '⚡ Hybrid AI + Keyword Results'
+                : searchType === 'semantic'
+                ? '🔮 AI Semantic Results'
+                : '📝 Keyword Results'}
             </span>
             <span className="text-xs text-gray-400">{results.length} matches</span>
           </div>
@@ -193,11 +198,23 @@ export function SemanticSearchBar({ basePath, placeholder = 'AI-powered search�
                     </p>
                   )}
                 </div>
-                {r.similarity !== null && (
-                  <span className="flex-shrink-0 text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded">
-                    {(r.similarity * 100).toFixed(0)}%
-                  </span>
-                )}
+                <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                  {r.match_type === 'hybrid' && (
+                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded leading-tight">
+                      ⚡ hybrid
+                    </span>
+                  )}
+                  {r.match_type === 'keyword' && (
+                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded leading-tight">
+                      keyword
+                    </span>
+                  )}
+                  {r.similarity !== null && (
+                    <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded">
+                      {(r.similarity * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           ))}
