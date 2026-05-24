@@ -78,6 +78,20 @@ function cleanContent(text: string, title?: string): string {
   return cleaned.trim()
 }
 
+// ── HTML Sanitiser (lightweight, no external deps) ───────────────────────
+// Strips event-handler attributes and javascript: URLs before inline render.
+// This is defense-in-depth for an internal knowledge base — not a substitute
+// for server-side sanitisation of fully untrusted content.
+function sanitizeHtml(html: string): string {
+  return html
+    // Remove all on* event handler attributes (onclick, onload, onerror, …)
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
+    // Replace javascript: hrefs/srcs with a safe anchor
+    .replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi, '$1="#"')
+    // Drop inline <script> blocks entirely
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+}
+
 // ── Detect content type ──────────────────────────────────────────────────
 function detectContentFormat(content: string): 'chat' | 'html-interactive' | 'markdown' | 'plain' {
   // Check for full HTML pages (interactive Genspark sites)
@@ -399,7 +413,14 @@ export function KBContentRenderer({ content, isHtml, itemType, metadata }: Props
 
   const cleaned = useMemo(() => cleanContent(content, extractedTitle), [content, extractedTitle])
   const toc = useMemo(() => extractToc(cleaned, isHtml), [cleaned, isHtml])
-  const format = useMemo(() => isHtml ? 'html' : detectContentFormat(cleaned), [cleaned, isHtml])
+  const format = useMemo(() => {
+    // Always run full detection first — html-interactive (iframe sandbox) must take
+    // priority over the caller-supplied isHtml flag so that full-page HTML documents
+    // (those with <html> / <style>+<div> structure) are never rendered inline.
+    const detected = detectContentFormat(cleaned)
+    if (detected === 'html-interactive') return 'html-interactive'
+    return isHtml ? 'html' : detected
+  }, [cleaned, isHtml])
   const showToc = toc.length >= 3 && cleaned.length > 2000
   const wordCount = useMemo(() => countWords(cleaned), [cleaned])
 
@@ -422,7 +443,8 @@ export function KBContentRenderer({ content, isHtml, itemType, metadata }: Props
 
   // ── Standard HTML ──
   if (isHtml) {
-    let htmlWithIds = cleaned
+    // Strip event-handler attributes and script blocks before inline rendering
+    let htmlWithIds = sanitizeHtml(cleaned)
     const re = /<h([1-6])([^>]*)>([^<]+)<\/h\1>/gi
     htmlWithIds = htmlWithIds.replace(re, (_match, level, attrs, text) => {
       const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
