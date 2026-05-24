@@ -10,6 +10,7 @@ import {
   getCategoryIcon,
 } from '../../../../../lib/supabase-kb'
 import { ItemTypeBadge } from '../../../../../components/kb/ItemTypeBadge'
+import { ItemHeaderEditable } from '../../../../../components/kb/ItemHeaderEditable'
 import { KBContentSection } from '../../../../../components/kb/KBContentSection'
 import { ShareDownloadBar } from '../../../../../components/kb/ShareDownloadBar'
 import { ItemPageToC } from '../../../../../components/kb/ItemPageToC'
@@ -131,10 +132,12 @@ async function ItemContent({ params }: Props) {
 
       {/* ── Article Header ──────────────────────────────────────── */}
       <header className="mb-10 pb-8 border-b border-gray-200 dark:border-gray-800">
-        {/* Title */}
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4 leading-tight kb-item-title">
-          {item.title}
-        </h1>
+        {/* Inline-editable title + tags */}
+        <ItemHeaderEditable
+          itemId={item.id}
+          initialTitle={item.title}
+          initialTags={tags}
+        />
 
         {/* Summary */}
         {item.summary && (
@@ -180,20 +183,6 @@ async function ItemContent({ params }: Props) {
           )}
         </div>
 
-        {/* Tags */}
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-5">
-            {tags.map(tag => (
-              <span
-                key={tag}
-                className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/15 border border-blue-200 dark:border-blue-800 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
         {/* Share & Download */}
         <div className="pt-2">
           <ShareDownloadBar
@@ -201,6 +190,7 @@ async function ItemContent({ params }: Props) {
             title={item.title}
             content={item.content || item.content_plain || ''}
             itemType={item.item_type}
+            sourceUrl={sourceUrl}
           />
         </div>
       </header>
