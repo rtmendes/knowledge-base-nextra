@@ -177,12 +177,129 @@ function buildMdoc(opts: {
   return fm + JSON.stringify(nodes)
 }
 
+// ── GET: check if a chat is already in the KB ────────────────────────────────
+// GET /api/import/genspark?chatId={uuid}
+// Returns { exists: boolean, captured: boolean }
+export async function GET(req: NextRequest) {
+  if (!authorize(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const chatId = searchParams.get('chatId')
+  if (!chatId) return NextResponse.json({ error: 'chatId required' }, { status: 400 })
+
+  const token = process.env.GITHUB_TOKEN
+  if (!token) return NextResponse.json({ exists: false, captured: false })
+
+  // Clean chatId — allow alphanumeric and dashes (UUID format)
+  const cleanId = chatId.replace(/[^a-zA-Z0-9-]/g, '')
+  const headers = {
+    Authorization: `token ${token}`,
+    Accept: 'application/vnd.github.v3+json',
+  }
+
+  // Check both agent and spark path conventions
+  const candidatePaths = [
+    `content/docs/genspark/agent/${cleanId}.mdoc`,
+    `content/docs/genspark/spark/${cleanId}.mdoc`,
+  ]
+
+  for (const filePath of candidatePaths) {
+    const res = await fetch(`${GH_API}/${filePath}`, { headers })
+    if (res.ok) return NextResponse.json({ exists: true, captured: true, path: filePath })
+  }
+
+  return NextResponse.json({ exists: false, captured: false })
+}
+
+// ── POST: import one or many chats ───────────────────────────────────────────
+// Accepts two formats:
+//   A) Extension / extract.py format: { chats: [{ chatId, chatName, shareLink, url, type, capturedAt }] }
+//   B) Legacy agent format:           { url, slug, title, ... }
 export async function POST(req: NextRequest) {
   if (!authorize(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
 
+  const token = process.env.GITHUB_TOKEN
+  if (!token) return NextResponse.json({ error: 'GITHUB_TOKEN not configured on server' }, { status: 500 })
+
+  // ── Format A: { chats: [...] } from Chrome extension or extract.py ─────────
+  if (Array.isArray(body.chats)) {
+    return handleChatArray(body.chats, token)
+  }
+
+  // ── Format B: legacy single-item { url, slug, ... } ──────────────────────
+  return handleLegacySingle(body, token)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Format A handler — extension / extract.py batch import
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleChatArray(chats: any[], token: string) {
+  if (chats.length === 0) return NextResponse.json({ error: 'chats array is empty' }, { status: 400 })
+
+  const committed: string[] = []
+  const errors: string[] = []
+  const results: any[] = []
+
+  for (const chat of chats) {
+    const { chatId, chatName, shareLink, url: chatUrl, type = 'agent', capturedAt } = chat
+    if (!chatId || !chatUrl) {
+      errors.push(`skipped entry missing chatId or url`)
+      continue
+    }
+
+    // Deterministic slug: genspark/{type}/{chatId}
+    // chatId is a UUID — safe chars, no transformation needed beyond lower
+    const chatType = type === 'spark' ? 'spark' : 'agent'
+    const safeSlug = `genspark/${chatType}/${chatId.toLowerCase()}`
+    const docTitle = chatName?.trim() || `Chat ${chatId.slice(0, 8)}`
+    const capturedDate = capturedAt ? new Date(capturedAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : 'automatically'
+    const description = `Genspark ${chatType} chat captured ${capturedDate}`
+
+    const mdoc = buildMdoc({
+      title: docTitle,
+      description,
+      status: 'active',
+      category: `genspark-${chatType}`,
+      tags: ['genspark', chatType, 'auto-captured'],
+      sourceUrl: chatUrl,
+      shareUrl: shareLink || undefined,
+    })
+
+    const result = await commitFile(
+      `content/docs/${safeSlug}.mdoc`,
+      mdoc,
+      `kb: import genspark ${chatType} "${docTitle}" [skip vercel]`,
+      token,
+    )
+
+    if (result.ok) {
+      committed.push(`content/docs/${safeSlug}.mdoc`)
+      await logImport({ source: 'genspark', url: chatUrl, slug: safeSlug, title: docTitle, status: 'success' })
+      results.push({ chatId, slug: safeSlug, ok: true, viewUrl: `https://kb.insightprofit.live/${safeSlug}` })
+    } else {
+      errors.push(`${chatId}: ${result.error}`)
+      await logImport({ source: 'genspark', url: chatUrl, slug: safeSlug, title: docTitle, status: 'error', error: result.error })
+      results.push({ chatId, slug: safeSlug, ok: false, error: result.error })
+    }
+  }
+
+  if (committed.length === 0) return NextResponse.json({ success: false, errors, results }, { status: 500 })
+
+  return NextResponse.json({
+    success: true,
+    committed,
+    results,
+    ...(errors.length ? { errors } : {}),
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Format B handler — legacy single-item import (agents, other tools)
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleLegacySingle(body: any, token: string) {
   const {
     url, slug, title, description = '', category, tags = [],
     status = 'active', markdownContent, shareUrl,
@@ -190,9 +307,6 @@ export async function POST(req: NextRequest) {
   } = body
 
   if (!url || !slug) return NextResponse.json({ error: 'url and slug are required' }, { status: 400 })
-
-  const token = process.env.GITHUB_TOKEN
-  if (!token) return NextResponse.json({ error: 'GITHUB_TOKEN not configured on server' }, { status: 500 })
 
   const safeSlug = sanitizeSlug(slug)
   const docTitle = title || safeSlug.split('/').pop()?.replace(/-/g, ' ') || 'Imported Page'
