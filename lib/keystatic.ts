@@ -13,7 +13,7 @@ type ReaderInstance = ReturnType<typeof createReader>
 const localReaderConfig = {
   ...keystaticConfig,
   storage: { kind: 'local' },
-} as Parameters<typeof createReader>[1]
+} as unknown as Parameters<typeof createReader>[1]
 
 function createFallbackReader(): ReaderInstance {
   const emptyList = async () => [] as string[]

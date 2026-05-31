@@ -84,16 +84,6 @@ export function DocRenderer({ document }: Props) {
               {children}
             </a>
           ),
-          // Inline images — used by imported genspark/claude content
-          image: ({ src, alt, title }: { src: string; alt: string; title?: string }) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={src}
-              alt={alt || ''}
-              title={title || undefined}
-              className="inline-block max-h-80 rounded border border-gray-200 dark:border-gray-700"
-            />
-          ),
         },
         block: {
           paragraph: ({ children, textAlign }) => (
@@ -124,9 +114,6 @@ export function DocRenderer({ document }: Props) {
             ) : (
               <ul className="my-5 ms-6 list-disc space-y-2 text-gray-700 dark:text-gray-300">{children}</ul>
             ),
-          'list-item': ({ children }) => (
-            <li className="leading-7 pl-1">{children}</li>
-          ),
           blockquote: ({ children }) => (
             <blockquote className="my-5 border-l-4 border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/20 pl-4 pr-3 py-2 rounded-r-lg text-gray-700 dark:text-gray-300 italic">
               {children}
@@ -162,19 +149,21 @@ export function DocRenderer({ document }: Props) {
               )}
             </figure>
           ),
-          table: ({ children }) => (
+          // Keystatic v0.5.x types omit table sub-renderers; all table keys stay
+          // in block but the whole object is cast to bypass the incomplete type
+          table: (props: any) => (
             <div className="my-5 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
-              <table className="w-full border-collapse text-sm">{children}</table>
+              <table className="w-full border-collapse text-sm">{props.children}</table>
             </div>
           ),
-          'table-head': ({ children }) => (
+          'table-head': ({ children }: any) => (
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">{children}</thead>
           ),
-          'table-body': ({ children }) => <tbody className="divide-y divide-gray-200 dark:divide-gray-700">{children}</tbody>,
-          'table-row': ({ children }) => (
+          'table-body': ({ children }: any) => <tbody className="divide-y divide-gray-200 dark:divide-gray-700">{children}</tbody>,
+          'table-row': ({ children }: any) => (
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">{children}</tr>
           ),
-          'table-cell': ({ children, header }) =>
+          'table-cell': ({ children, header }: any) =>
             header ? (
               <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">
                 {children}
@@ -182,7 +171,7 @@ export function DocRenderer({ document }: Props) {
             ) : (
               <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{children}</td>
             ),
-        },
+        } as any,
       }}
     />
   )

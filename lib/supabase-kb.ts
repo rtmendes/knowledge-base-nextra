@@ -271,7 +271,7 @@ export async function getItemChildren(parentId: string): Promise<KBItem[]> {
   if (!supabaseAdmin) return []
   const { data, error } = await supabaseAdmin
     .from('knowledge_items')
-    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, metadata, created_at, updated_at')
+    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, metadata, bound_brands, bound_features, bound_publications, created_at, updated_at')
     .eq('parent_id', parentId)
     .order('created_at', { ascending: true })
   if (error) { console.error('[kb] getItemChildren error:', error); return [] }
@@ -285,7 +285,7 @@ export async function getItemSiblings(parentId: string, excludeId: string): Prom
   if (!supabaseAdmin) return []
   const { data, error } = await supabaseAdmin
     .from('knowledge_items')
-    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, metadata, created_at, updated_at')
+    .select('id, title, slug, item_type, category_id, parent_id, word_count, tags, status, summary, metadata, bound_brands, bound_features, bound_publications, created_at, updated_at')
     .eq('parent_id', parentId)
     .neq('id', excludeId)
     .order('created_at', { ascending: true })
