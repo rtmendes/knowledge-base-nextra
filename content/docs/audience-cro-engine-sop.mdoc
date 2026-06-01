@@ -1,0 +1,284 @@
+---
+title: "Audience-Driven CRO Engine — Standard Operating Procedure (SOP)"
+slug: "audience-cro-engine-sop"
+status: active
+---
+
+## Reverse-Engineered from MintCRO's Sprint Testing Methodology + AI Enhancement
+
+**Version:** 1.0  
+**Date:** May 11, 2026  
+**Owner:** InsightProfit AI Operations  
+**Replaces:** Manual ad testing, spaghetti testing, gut-based copy decisions
+
+---
+
+## 1. PURPOSE & PHILOSOPHY
+
+This SOP codifies MintCRO's "Sprint Testing" methodology — an engineering approach to marketing that replaces random "spaghetti testing" with systematic, data-driven message discovery using audience comments, engagement signals, and rapid Color Block ad tests.
+
+**Core Principle:** Your audience already tells you what converts — in their comments, reviews, DMs, and engagement patterns. This system mines that language, tests it scientifically, and builds a library of "Gold Coins" (proven converting messages) for any offer or niche.
+
+**Expected Outcomes:**
+- 2–10× conversion rate improvement within 90 days
+- 50%+ reduction in CPA
+- Test any message variant in 24 hours for ~$35
+- Eliminate guesswork from ad copy, landing pages, and social content
+
+---
+
+## 2. KEY DEFINITIONS
+
+| Term | Definition |
+|------|-----------|
+| **Gold Coin** | A proven audience message, phrase, or angle that drives conversions. Collected from test winners and audience language mining. |
+| **Color Block Test** | A stripped-down ad format (solid color background + headline text only) designed to isolate message performance from creative noise. |
+| **Sprint Test** | A structured, rapid ad test ($35 budget, 24-hour window, up to 10 variants) — the opposite of "spaghetti testing." |
+| **Audience Snippet** | A raw comment, review, DM excerpt, or engagement signal harvested from social platforms showing real audience language. |
+| **High Impact Test (HIT)** | MintCRO's flagship test type — tests the single highest-leverage element (usually the headline/hook). |
+| **Motivator Map** | A structured profile of what drives your audience to act (pain points, desires, objections, trigger words). |
+
+---
+
+## 3. THE 6-STEP SPRINT TESTING CYCLE
+
+### STEP 1: MINE AUDIENCE LANGUAGE (Days 1–2)
+
+**Objective:** Harvest real words your audience uses to describe their problems, desires, and objections.
+
+**Sources to Mine:**
+1. **Social Media Comments** — Your posts, competitor posts, industry influencer posts
+2. **Ad Comments** — Both your ads and competitor ads
+3. **Reviews** — Amazon, Google, Trustpilot, app stores for products in your niche
+4. **DMs & Support Tickets** — Direct customer language
+5. **Forum/Reddit Posts** — r/[your-niche], Quora, Facebook Groups
+6. **YouTube Comments** — On relevant videos in your space
+7. **Survey Responses** — Post-purchase surveys, exit surveys
+
+**Process:**
+1. Identify 5–10 high-engagement posts/ads in your niche (competitors or your own)
+2. Extract every comment that reveals a pain point, desire, objection, or emotional trigger
+3. Tag each snippet with: `source`, `sentiment`, `theme`, `exact quote`, `engagement score`
+4. Group snippets into clusters: Pain Points, Desires, Objections, Transformations, Social Proof
+5. Rank clusters by frequency and engagement weight
+
+**AI Agent Automation:**
+- Auto-scrape comments from specified Instagram/Facebook/YouTube posts
+- NLP extraction of key phrases, sentiment, and themes
+- Auto-categorize into motivator buckets
+- Score by engagement (likes/replies on the comment itself)
+
+**Output:** Motivator Map with ranked audience language clusters
+
+---
+
+### STEP 2: BUILD YOUR MOTIVATOR MAP (Day 2)
+
+**Objective:** Organize mined language into a structured testing framework.
+
+**Motivator Map Template:**
+
+| Category | Audience Language (Verbatim) | Theme | Frequency | Priority |
+|----------|------------------------------|-------|-----------|----------|
+| Pain Point | "I'm tired of wasting money on ads that don't work" | Ad spend frustration | 47 mentions | 🔴 HIGH |
+| Desire | "I just want consistent leads without the rollercoaster" | Consistency/predictability | 32 mentions | 🔴 HIGH |
+| Objection | "Another guru course that probably doesn't work" | Skepticism | 28 mentions | 🟡 MED |
+| Transformation | "Went from $8 per lead to $1.47 overnight" | Cost reduction proof | 19 mentions | 🟡 MED |
+| Trigger Word | "finally", "game-changer", "wish I knew sooner" | Breakthrough language | 65 occurrences | 🔴 HIGH |
+
+**Process:**
+1. Take your top 20 audience snippets
+2. Rewrite each as a potential headline (keep original language where possible)
+3. Group into 3–5 test themes
+4. Select the highest-priority theme for your first Sprint Test
+
+---
+
+### STEP 3: GENERATE COLOR BLOCK TEST VARIANTS (Day 2–3)
+
+**Objective:** Create 5–10 simple ad variants that isolate message effectiveness.
+
+**Color Block Ad Specs:**
+- **Format:** Single solid-color background + headline text (NO images, NO logos, NO design)
+- **Why:** Strips away creative variables so you're testing MESSAGE ONLY
+- **Colors:** Use high-contrast, attention-grabbing colors (yellow, red, blue, green)
+- **Each variant changes ONLY the headline** — same color, same font, same CTA
+
+**Variant Generation Framework:**
+1. Take your #1 motivator theme
+2. Write 10 headline variants using audience language:
+   - 2× Direct pain point headlines
+   - 2× Desire/outcome headlines  
+   - 2× Specific number/result headlines
+   - 2× Question headlines (using audience's exact questions)
+   - 2× Social proof/transformation headlines
+
+**AI Agent Automation:**
+- Input: Motivator Map + offer details
+- Output: 10 Color Block ad variants with headlines drawn from audience language
+- Each variant scored for: emotional intensity, specificity, audience-language fidelity
+
+**Example for a CRO coaching offer:**
+1. "Tired of Wasting $1000s Testing Ads That Don't Work?"
+2. "What If You Could Test 10 Ad Messages for Just $35?"
+3. "From $8 Per Lead to $1.47 — In One Test"
+4. "Stop Guessing. Start Sprint Testing."
+5. "Your Audience Already Told You What Converts. You Just Missed It."
+
+---
+
+### STEP 4: RUN THE SPRINT TEST (Day 3–4)
+
+**Objective:** Launch test, collect data in 24 hours, spend ≤$35.
+
+**Test Setup Rules:**
+- **Platform:** Meta Ads (Facebook/Instagram) — optimized for reach or link clicks
+- **Budget:** $35 total ($3.50 per variant if testing 10)
+- **Duration:** 24 hours ONLY
+- **Audience:** Your existing targeting (don't test audience AND message simultaneously)
+- **Optimization:** Reach or ThruPlay (NOT conversions — you want data volume, not algorithmic bias)
+- **Placement:** Automatic (let Meta distribute)
+
+**Launch Checklist:**
+- [ ] All variants use identical settings except headline text
+- [ ] Budget rules set: daily budget = total, no lifetime budget
+- [ ] Tracking pixel installed on destination
+- [ ] UTM parameters on each variant link (utm_content = variant_id)
+- [ ] Campaign named: `SPRINT_{offer}_{date}_{test_number}`
+
+**What to Track:**
+- CTR (Click-Through Rate) per variant
+- CPC (Cost Per Click) per variant
+- Engagement Rate (likes, comments, shares) per variant
+- Comment content on each variant (new Gold Coins!)
+- Time on page from each variant (if driving to LP)
+
+---
+
+### STEP 5: READ THE DATA & COLLECT GOLD COINS (Day 4–5)
+
+**Objective:** Identify winners and harvest new audience insights from the test.
+
+**Analysis Framework:**
+
+| Metric | Winner Threshold | Action |
+|--------|-----------------|--------|
+| CTR | 2×+ above average | 🏆 Gold Coin — promote to ads, LPs, social |
+| CPC | 50%+ below average | 🏆 Gold Coin — this message resonates cheaply |
+| Engagement | Highest comments/shares | 🏆 Potential Gold Coin — analyze comment sentiment |
+| Comment Quality | Positive/excited comments | 🏆 Mine these comments for next test's language |
+
+**Gold Coin Grading:**
+- ⭐⭐⭐⭐⭐ **Platinum Coin**: Winner on CTR + CPC + Engagement (use everywhere immediately)
+- ⭐⭐⭐⭐ **Gold Coin**: Winner on 2 of 3 metrics (use in primary channels)
+- ⭐⭐⭐ **Silver Coin**: Single metric winner (test further before scaling)
+- ⭐⭐ **Bronze Coin**: Above average but not a clear winner (bank for future reference)
+- ⭐ **Discard**: Below average on all metrics (archive, don't reuse)
+
+**Critical Step — Mine Test Comments:**
+Every comment on every test variant is new data. Capture:
+- What people said in response to each variant
+- Which variants generated the most positive conversation
+- New pain points, desires, or objections that surfaced
+- Exact language people used (feed back into Step 1)
+
+---
+
+### STEP 6: DEPLOY GOLD COINS & ITERATE (Day 5+)
+
+**Objective:** Use winning messages across all channels; start next Sprint Test.
+
+**Gold Coin Deployment Matrix:**
+
+| Channel | How to Use Gold Coins |
+|---------|----------------------|
+| **Facebook/IG Ads** | Use winning headlines as primary text, test with real creative |
+| **Google Ads** | Adapt winning messages as RSA headlines and descriptions |
+| **Landing Pages** | Replace hero headlines and subheads with Gold Coin language |
+| **Email Subject Lines** | Test Gold Coin headlines as email subjects |
+| **Social Posts** | Use winning angles as organic post hooks |
+| **Sales Scripts** | Train SDRs/closers on the language that resonates |
+| **Retargeting** | Use Gold Coin messages for warm audience re-engagement |
+| **SEO Content** | Build blog/video content around winning themes |
+
+**Iteration Cadence:**
+- Run 1 Sprint Test per week minimum
+- After 4 weeks: You should have 5–15 Gold Coins
+- After 12 weeks (90 days): 20–50 Gold Coins = complete messaging playbook
+- Compound effect: Each test's comments feed the next test's variants
+
+---
+
+## 4. AGENTIC AI WORKFLOW (AUTOMATION LAYER)
+
+### 4.1 Comment Mining Agent
+- **Trigger:** Daily or on-demand
+- **Input:** List of social URLs (your posts, competitor posts, niche content)
+- **Process:** Scrape comments → NLP extraction → sentiment analysis → theme clustering
+- **Output:** New audience snippets added to Motivator Map with scores
+
+### 4.2 Variant Generator Agent
+- **Trigger:** When starting a new Sprint Test
+- **Input:** Current Motivator Map + offer details + past Gold Coins
+- **Process:** AI generates 10 headline variants using audience language patterns
+- **Output:** Ready-to-launch Color Block ad set
+
+### 4.3 Test Analysis Agent
+- **Trigger:** 24 hours after test launch
+- **Input:** Ad platform performance data + comment data
+- **Process:** Score variants → grade Gold Coins → mine new comments → update Motivator Map
+- **Output:** Test report + Gold Coins added to library + next test recommendations
+
+### 4.4 Deployment Agent
+- **Trigger:** When Gold Coins are confirmed
+- **Input:** Gold Coin library + active channel list
+- **Process:** Generate deployment suggestions for each channel (ads, LP headlines, email subjects)
+- **Output:** Channel-specific copy recommendations using Gold Coin language
+
+### 4.5 Competitor Intelligence Agent
+- **Trigger:** Weekly
+- **Input:** Competitor social accounts + ad libraries
+- **Process:** Monitor competitor ads and comments → extract audience language → identify gaps
+- **Output:** Competitive intelligence report + new audience snippets
+
+---
+
+## 5. METRICS & KPIs
+
+| KPI | Target | Measurement |
+|-----|--------|-------------|
+| Gold Coins per month | 5–15 | Count of ⭐⭐⭐⭐+ rated messages |
+| Sprint Tests per month | 4+ | Count of completed tests |
+| Average test CTR | >2% | Across all variants |
+| CPA reduction (30-day) | -25% | Compared to baseline |
+| CPA reduction (90-day) | -50% | Compared to baseline |
+| Conversion rate lift | 2–10× | Landing page or funnel conversion rate |
+| Comment-to-Coin ratio | >10% | % of mined comments that become Gold Coins |
+| Cost per Sprint Test | ≤$35 | Ad spend per test cycle |
+
+---
+
+## 6. TOOLS REQUIRED
+
+| Tool | Purpose | Cost |
+|------|---------|------|
+| Meta Ads Manager | Run Color Block tests | $35/test |
+| Audience CRO Engine (our app) | Mine comments, generate variants, track Gold Coins | Built-in |
+| Canva (optional) | Create Color Block ad images | Free tier |
+| Google Analytics / Clarity | Track post-click behavior | Free |
+| AI Agent (Viktor) | Automate mining, generation, analysis | Included |
+
+---
+
+## 7. QUICK-START CHECKLIST
+
+- [ ] Choose your first offer/niche to test
+- [ ] Mine 50+ audience comments from 5 sources
+- [ ] Build your first Motivator Map
+- [ ] Generate 10 Color Block headline variants
+- [ ] Set up Meta Ads campaign with $35 budget
+- [ ] Launch Sprint Test → wait 24 hours
+- [ ] Analyze results → collect Gold Coins
+- [ ] Deploy top Gold Coins to 3+ channels
+- [ ] Start next Sprint Test with new insights
+- [ ] Repeat weekly for 90 days → messaging mastery
