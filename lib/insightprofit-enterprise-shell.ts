@@ -3,18 +3,19 @@
 // Shared cross-app navigation, workflow context, and lightweight event bridge.
 // This module intentionally has no framework dependencies so it can run inside React, Next.js, and vanilla apps.
 
+// live: true = deployed and reachable; false = planned/coming soon
 const INSIGHTPROFIT_APPS = [
-  { id: 'command', name: 'Command Center', role: 'AI orchestration', url: 'https://command.insightprofit.live/', stage: 'orchestrate', group: 'Control' },
-  { id: 'research', name: 'Research', role: 'market and source intelligence', url: 'https://research.insightprofit.live/', stage: 'research', group: 'Create' },
-  { id: 'kb', name: 'Knowledge Base', role: 'shared operating memory', url: 'https://kb.insightprofit.live/', stage: 'memory', group: 'Control' },
-  { id: 'elitewriter', name: 'Elite Writer', role: 'long-form and conversion copy', url: 'https://elitewriter.insightprofit.live/', stage: 'draft', group: 'Create' },
-  { id: 'paperclip', name: 'Paperclip', role: 'projects, approvals, and execution', url: 'https://paperclip.insightprofit.live/', stage: 'package', group: 'Operate' },
-  { id: 'polsia', name: 'Polsia', role: 'autonomous company operators', url: 'https://polsia.insightprofit.live/', stage: 'automate', group: 'Agents' },
-  { id: 'agent-zero', name: 'Agent Zero', role: 'general-purpose agent terminal', url: 'https://agent-zero.insightprofit.live/', stage: 'execute', group: 'Agents' },
-  { id: 'hermes', name: 'Hermes', role: 'messaging and outreach agent', url: 'https://hermes.insightprofit.live/', stage: 'distribute', group: 'Agents' },
-  { id: 'sparky', name: 'Sparky Studio', role: 'media production and render jobs', url: 'https://sparky.insightprofit.live/', stage: 'media', group: 'Create' },
-  { id: 'revenue', name: 'Revenue Engine', role: 'offers, launches, and monetization', url: 'https://revenue.insightprofit.live/', stage: 'monetize', group: 'Revenue' },
-  { id: 'ops', name: 'Operations', role: 'services, tasks, and infrastructure health', url: 'https://ops.insightprofit.live/', stage: 'operate', group: 'Operate' }
+  { id: 'command', name: 'Command Center', role: 'AI orchestration', url: 'https://command.insightprofit.live/', stage: 'orchestrate', group: 'Control', live: true },
+  { id: 'research', name: 'Research', role: 'market and source intelligence', url: 'https://research.insightprofit.live/', stage: 'research', group: 'Create', live: true },
+  { id: 'kb', name: 'Knowledge Base', role: 'shared operating memory', url: 'https://kb.insightprofit.live/', stage: 'memory', group: 'Control', live: true },
+  { id: 'elitewriter', name: 'Elite Writer', role: 'long-form and conversion copy', url: 'https://elite-writer-app.insightprofit.live/', stage: 'draft', group: 'Create', live: true },
+  { id: 'sparky', name: 'Sparky Studio', role: 'media production and render jobs', url: 'https://sparky.insightprofit.live/', stage: 'media', group: 'Create', live: true },
+  { id: 'revenue', name: 'Revenue Engine', role: 'offers, launches, and monetization', url: 'https://revenue.insightprofit.live/', stage: 'monetize', group: 'Revenue', live: true },
+  { id: 'paperclip', name: 'Paperclip', role: 'projects, approvals, and execution', url: 'https://paperclip.insightprofit.live/', stage: 'package', group: 'Operate', live: false },
+  { id: 'polsia', name: 'Polsia', role: 'autonomous company operators', url: 'https://polsia.insightprofit.live/', stage: 'automate', group: 'Agents', live: false },
+  { id: 'hermes', name: 'Hermes', role: 'messaging and outreach agent', url: 'https://hermes.insightprofit.live/', stage: 'distribute', group: 'Agents', live: false },
+  { id: 'agent-zero', name: 'Agent Zero', role: 'general-purpose agent terminal', url: 'https://agent-zero.insightprofit.live/', stage: 'execute', group: 'Agents', live: false },
+  { id: 'ops', name: 'Operations', role: 'services, tasks, and infrastructure health', url: 'https://ops.insightprofit.live/', stage: 'operate', group: 'Operate', live: false }
 ];
 
 const INSIGHTPROFIT_PIPELINE = [
@@ -81,6 +82,13 @@ function injectStyles() {
     .ipx-app-name { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 760; color: #f8fafc; }
     .ipx-app-role { margin-top: 5px; font-size: 10.5px; line-height: 1.35; color: #94a3b8; }
     .ipx-pill { font-size: 9px; color: #99f6e4; border: 1px solid rgba(45,212,191,.25); border-radius: 999px; padding: 2px 6px; white-space: nowrap; }
+    .ipx-app-planned { opacity: .45; cursor: not-allowed; }
+    .ipx-app-planned:hover { transform: none; border-color: rgba(148,163,184,.18); background: rgba(15,23,42,.58); }
+    .ipx-planned-tag { font-size: 8.5px; color: #64748b; border: 1px solid rgba(100,116,139,.3); border-radius: 999px; padding: 1px 5px; white-space: nowrap; }
+    .ipx-context-banner { margin-bottom: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(20,184,166,.1); border: 1px solid rgba(45,212,191,.25); color: #99f6e4; font-size: 10.5px; line-height: 1.4; display: none; }
+    .ipx-context-banner.ipx-visible { display: block; }
+    .ipx-context-title { font-weight: 700; margin-bottom: 2px; }
+    .ipx-context-url { color: #64748b; font-size: 9.5px; word-break: break-all; }
     .ipx-pipeline { display: grid; gap: 8px; }
     .ipx-stage { border: 1px solid rgba(148,163,184,.16); background: rgba(15,23,42,.48); border-radius: 15px; padding: 10px 11px; }
     .ipx-stage-top { display: flex; align-items: center; gap: 9px; }
@@ -157,6 +165,9 @@ function bootInsightProfitEnterpriseShell(options = {}) {
 
   const root = document.createElement('div');
   root.id = ROOT_ID;
+  const liveApps = INSIGHTPROFIT_APPS.filter(a => a.live);
+  const plannedApps = INSIGHTPROFIT_APPS.filter(a => !a.live);
+
   root.innerHTML = `
     <button class="ipx-launcher" type="button" aria-label="Open InsightProfit enterprise switcher"><span class="ipx-launcher-mark">IP</span></button>
     <section class="ipx-panel" aria-label="InsightProfit enterprise switcher">
@@ -164,24 +175,37 @@ function bootInsightProfitEnterpriseShell(options = {}) {
         <div class="ipx-launcher-mark">IP</div>
         <div>
           <div class="ipx-title">Enterprise Workflow Switcher</div>
-          <div class="ipx-subtitle">${currentApp.name} is connected to the shared idea to content to monetization pipeline.</div>
+          <div class="ipx-subtitle">${currentApp.name} · Send content to any connected app</div>
         </div>
         <button class="ipx-close" type="button" aria-label="Close">×</button>
       </div>
       <div class="ipx-body">
-        <div class="ipx-section-label">Connected apps</div>
-        <div class="ipx-app-grid">
-          ${INSIGHTPROFIT_APPS.map((app) => `<a class="ipx-app ${app.id === currentApp.id ? 'ipx-app-active' : ''}" href="${app.url}" data-ipx-app="${app.id}"><div class="ipx-app-name"><span>${app.name}</span><span class="ipx-pill">${app.group}</span></div><div class="ipx-app-role">${app.role}</div></a>`).join('')}
+        <!-- Current page context banner -->
+        <div class="ipx-context-banner" id="ipx-context-banner">
+          <div class="ipx-context-title">📦 Context packaged</div>
+          <div class="ipx-context-url" id="ipx-context-url"></div>
         </div>
+
+        <div class="ipx-section-label">Live apps — click to send content</div>
+        <div class="ipx-app-grid">
+          ${liveApps.map((app) => `<button type="button" class="ipx-app ${app.id === currentApp.id ? 'ipx-app-active' : ''}" data-ipx-app="${app.id}" data-ipx-url="${app.url}"><div class="ipx-app-name"><span>${app.name}</span><span class="ipx-pill">${app.group}</span></div><div class="ipx-app-role">${app.role}</div></button>`).join('')}
+        </div>
+
+        ${plannedApps.length ? `
+        <div class="ipx-section-label" style="margin-top:12px">Coming soon</div>
+        <div class="ipx-app-grid">
+          ${plannedApps.map((app) => `<div class="ipx-app ipx-app-planned"><div class="ipx-app-name"><span>${app.name}</span><span class="ipx-planned-tag">planned</span></div><div class="ipx-app-role">${app.role}</div></div>`).join('')}
+        </div>` : ''}
+
         <div class="ipx-section-label" style="margin-top:14px">Workflow pipeline</div>
         <div class="ipx-pipeline">
-          ${INSIGHTPROFIT_PIPELINE.map((stage, index) => `<div class="ipx-stage"><div class="ipx-stage-top"><div class="ipx-stage-index">${index + 1}</div><div class="ipx-stage-title">${stage.label}</div></div><div class="ipx-stage-copy">${stage.description}</div><div class="ipx-stage-links">${stage.apps.map((appIdForStage) => { const app = INSIGHTPROFIT_APPS.find((x) => x.id === appIdForStage); return app ? `<a class="ipx-stage-link" href="${urlFor(app, stage.id)}" data-ipx-stage="${stage.id}" data-ipx-app="${app.id}">${app.name}</a>` : ''; }).join('')}</div></div>`).join('')}
+          ${INSIGHTPROFIT_PIPELINE.map((stage, index) => `<div class="ipx-stage"><div class="ipx-stage-top"><div class="ipx-stage-index">${index + 1}</div><div class="ipx-stage-title">${stage.label}</div></div><div class="ipx-stage-copy">${stage.description}</div><div class="ipx-stage-links">${stage.apps.map((appIdForStage) => { const app = INSIGHTPROFIT_APPS.find((x) => x.id === appIdForStage); return app && app.live ? `<button type="button" class="ipx-stage-link" data-ipx-stage="${stage.id}" data-ipx-app="${app.id}" data-ipx-url="${urlFor(app, stage.id)}">${app.name}</button>` : app ? `<span class="ipx-stage-link" style="opacity:.4;cursor:not-allowed">${app.name}</span>` : ''; }).join('')}</div></div>`).join('')}
         </div>
         <div class="ipx-actions">
           <button class="ipx-action ipx-action-primary" type="button" data-ipx-command="send-context">Send context to Command</button>
-          <button class="ipx-action" type="button" data-ipx-command="copy-brief">Copy workflow brief</button>
+          <button class="ipx-action" type="button" data-ipx-command="copy-brief">Copy as markdown</button>
         </div>
-        <div class="ipx-footer">Events are written to a shared Supabase table when environment variables are present; otherwise they queue locally and remain available to Command Center via browser storage.</div>
+        <div class="ipx-footer">Content is packaged from the current page and written to shared storage before opening the target app — no login required at the receiving end.</div>
       </div>
     </section>
   `;
@@ -192,28 +216,111 @@ function bootInsightProfitEnterpriseShell(options = {}) {
   launcher?.addEventListener('click', () => root.classList.add('ipx-open'));
   close?.addEventListener('click', () => root.classList.remove('ipx-open'));
 
+  // ── Capture page context from DOM ────────────────────────────────────────
+  // Uses textContent assignment only — never innerHTML — to avoid XSS.
+  function capturePageContext() {
+    const title = document.title || document.querySelector('h1')?.textContent?.trim() || '(untitled)';
+    const url = location.href;
+    const sel = selectedText();
+    // Grab visible text from the main content area, capped to 4000 chars
+    const contentEl = document.querySelector('article, main, [data-content], .kb-item-content');
+    const body = contentEl
+      ? (contentEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
+      : '';
+    const tags: string[] = [];
+    document.querySelectorAll('[data-tag], .kb-tag, [data-kb-tag]').forEach(el => {
+      const t = el.textContent?.trim();
+      if (t) tags.push(t);
+    });
+    return { title, url, selectedText: sel, body, tags };
+  }
+
+  function showContextBanner(ctx: { title: string; url: string }) {
+    const banner = document.getElementById('ipx-context-banner');
+    const urlEl = document.getElementById('ipx-context-url');
+    if (!banner || !urlEl) return;
+    // textContent only — never innerHTML — safe against XSS
+    urlEl.textContent = ctx.title + ' · ' + ctx.url;
+    banner.classList.add('ipx-visible');
+  }
+
+  function storeContext(ctx: ReturnType<typeof capturePageContext>, eventId: string) {
+    try {
+      localStorage.setItem('insightprofit.kb.context', JSON.stringify({
+        ...ctx, source_app: appId, event_id: eventId, captured_at: new Date().toISOString()
+      }));
+    } catch {}
+  }
+
+  // ── App tile clicks — package context then navigate ──────────────────────
   root.querySelectorAll('[data-ipx-app]').forEach((node) => {
-    node.addEventListener('click', () => {
-      const app = node.getAttribute('data-ipx-app');
+    node.addEventListener('click', async () => {
+      const targetAppId = node.getAttribute('data-ipx-app');
+      const targetUrl = node.getAttribute('data-ipx-url');
       const stage = node.getAttribute('data-ipx-stage') || 'open_app';
-      publishEnterpriseEvent(createEvent(appId, 'app_switch', { target_app: app, stage, from_url: location.href, selected_text: selectedText() }));
+
+      if (!targetUrl || targetAppId === appId) return;
+
+      const ctx = capturePageContext();
+      const event = await publishEnterpriseEvent(createEvent(appId, 'app_switch', {
+        target_app: targetAppId, stage,
+        from_url: ctx.url, page_title: ctx.title,
+        selected_text: ctx.selectedText, content_preview: ctx.body.slice(0, 500),
+        tags: ctx.tags,
+      }));
+
+      storeContext(ctx, event.id);
+      showContextBanner(ctx);
+
+      // Brief delay so the banner is visible before leaving
+      setTimeout(() => {
+        const dest = new URL(targetUrl);
+        dest.searchParams.set('ipx_event', event.id);
+        dest.searchParams.set('ipx_source', appId);
+        dest.searchParams.set('ipx_stage', stage);
+        window.open(dest.toString(), '_blank', 'noopener,noreferrer');
+      }, 320);
     });
   });
 
+  // ── Send context to Command ──────────────────────────────────────────────
   root.querySelector('[data-ipx-command="send-context"]')?.addEventListener('click', async () => {
+    const ctx = capturePageContext();
     const event = await publishEnterpriseEvent(createEvent(appId, 'workflow_context_sent', {
-      current_app: currentApp.name,
-      current_url: location.href,
-      selected_text: selectedText(),
-      recommended_next_stage: currentApp.stage
+      current_app: currentApp.name, current_url: ctx.url, page_title: ctx.title,
+      selected_text: ctx.selectedText, content_preview: ctx.body.slice(0, 1000),
+      tags: ctx.tags, recommended_next_stage: currentApp.stage
     }));
-    window.open(`${getConfig().commandUrl}?ipx_event=${encodeURIComponent(event.id)}&ipx_source=${encodeURIComponent(appId)}#enterprise-orchestrator`, '_blank', 'noopener,noreferrer');
+    storeContext(ctx, event.id);
+    showContextBanner(ctx);
+    const commandUrl = new URL(getConfig().commandUrl);
+    commandUrl.searchParams.set('ipx_event', event.id);
+    commandUrl.searchParams.set('ipx_source', appId);
+    commandUrl.hash = 'enterprise-orchestrator';
+    window.open(commandUrl.toString(), '_blank', 'noopener,noreferrer');
   });
 
+  // ── Copy as markdown ─────────────────────────────────────────────────────
   root.querySelector('[data-ipx-command="copy-brief"]')?.addEventListener('click', async () => {
-    const brief = `InsightProfit workflow context\nApp: ${currentApp.name}\nURL: ${location.href}\nSelected text: ${selectedText() || '(none)'}\nNext stage: ${currentApp.stage}`;
-    try { await navigator.clipboard.writeText(brief); root.querySelector('[data-ipx-command="copy-brief"]').textContent = 'Copied'; } catch {}
-    publishEnterpriseEvent(createEvent(appId, 'workflow_brief_copied', { brief }));
+    const ctx = capturePageContext();
+    // Build safe plain-text markdown — no HTML injection possible in clipboard write
+    const lines = [
+      `# KB Context: ${ctx.title}`,
+      `**URL:** ${ctx.url}`,
+      ctx.tags.length ? `**Tags:** ${ctx.tags.join(', ')}` : '',
+      '',
+      ctx.selectedText ? `**Selected text:**\n> ${ctx.selectedText}` : '',
+      '',
+      ctx.body ? `**Content preview:**\n${ctx.body.slice(0, 1500)}` : '',
+    ].filter(l => l !== undefined);
+    const brief = lines.join('\n').trim();
+    try {
+      await navigator.clipboard.writeText(brief);
+      const btn = root.querySelector('[data-ipx-command="copy-brief"]');
+      if (btn) btn.textContent = '✓ Copied';
+      setTimeout(() => { if (btn) btn.textContent = 'Copy as markdown'; }, 2000);
+    } catch {}
+    publishEnterpriseEvent(createEvent(appId, 'workflow_brief_copied', { page_title: ctx.title, url: ctx.url }));
   });
 
   window.InsightProfitEnterprise = {

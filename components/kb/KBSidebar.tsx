@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -23,6 +23,7 @@ interface SidebarItem {
   item_type: string
   category_id: string
   parent_id?: string | null
+  tags?: string[]
   updated_at?: string
 }
 
@@ -37,6 +38,15 @@ interface KBSidebarProps {
   selectedIds: Set<string>
   onToggleSelection: (id: string) => void
   onToggleSelectionMode: () => void
+  onCategoryUpdate?: (cat: Category) => void
+  onCategoryDelete?: (catId: string) => void
+}
+
+interface ContextMenu {
+  x: number
+  y: number
+  catId: string
+  catName: string
 }
 
 // ── Icon Map ──────────────────────────────────────────────────────────────
@@ -68,19 +78,42 @@ function getCatIcon(icon: string): string {
 // ── Sidebar Component ─────────────────────────────────────────────────────
 
 export function KBSidebar({
-  categories, isOpen, onClose, onCreateItem, onCreateCategory, onTagsPanel,
+  categories: categoriesProp,
+  isOpen, onClose, onCreateItem, onCreateCategory, onTagsPanel,
   selectionMode, selectedIds, onToggleSelection, onToggleSelectionMode,
+  onCategoryUpdate, onCategoryDelete,
 }: KBSidebarProps) {
   const pathname = usePathname()
+
+  // ── Core state ──────────────────────────────────────────────────────────
+  const [categories, setCategories] = useState(categoriesProp)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [categoryItems, setCategoryItems] = useState<Record<string, SidebarItem[]>>({})
   const [loadingCategories, setLoadingCategories] = useState<Set<string>>(new Set())
   const [recentItems, setRecentItems] = useState<SidebarItem[]>([])
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [sidebarFilter, setSidebarFilter] = useState('')
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+
+  // ── Drag state ──────────────────────────────────────────────────────────
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null)
   const [dragOverParent, setDragOverParent] = useState<string | null>(null)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [draggingCatId, setDraggingCatId] = useState<string | null>(null)
+
+  // ── Inline rename ───────────────────────────────────────────────────────
+  const [renamingCatId, setRenamingCatId] = useState<string | null>(null)
+  const [renamingCatValue, setRenamingCatValue] = useState('')
+  const [renamingItemId, setRenamingItemId] = useState<string | null>(null)
+  const [renamingItemValue, setRenamingItemValue] = useState('')
+  const [renamingItemCatId, setRenamingItemCatId] = useState<string | null>(null)
+  const renameInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Context menu ────────────────────────────────────────────────────────
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+
+  // Sync categories from prop
+  useEffect(() => { setCategories(categoriesProp) }, [categoriesProp])
 
   // Load recent items and favorites from localStorage
   useEffect(() => {
@@ -105,7 +138,28 @@ export function KBSidebar({
     }
   }, [pathname, categories])
 
-  // Load items for a category
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [contextMenu])
+
+  // Focus rename input when it appears
+  useEffect(() => {
+    if ((renamingCatId || renamingItemId) && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [renamingCatId, renamingItemId])
+
+  // ── Load items ───────────────────────────────────────────────────────────
+
   const loadCategoryItems = useCallback(async (categoryId: string) => {
     if (categoryItems[categoryId] || loadingCategories.has(categoryId)) return
 
@@ -147,23 +201,114 @@ export function KBSidebar({
     })
   }, [])
 
-  // ── Drag & Drop ───────────────────────────────────────────────────────
+  // ── Inline rename ────────────────────────────────────────────────────────
 
-  const handleDragStart = useCallback((e: React.DragEvent, itemId: string, itemTitle: string) => {
+  const startRenameCategory = useCallback((catId: string, name: string) => {
+    setContextMenu(null)
+    setRenamingCatId(catId)
+    setRenamingCatValue(name)
+  }, [])
+
+  const saveRenameCategory = useCallback(async (catId: string) => {
+    const name = renamingCatValue.trim()
+    setRenamingCatId(null)
+    if (!name) return
+    try {
+      const res = await fetch(`/api/kb/categories/${catId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setCategories(prev => prev.map(c => c.id === catId ? { ...c, name: updated.name, slug: updated.slug } : c))
+        onCategoryUpdate?.(updated)
+      }
+    } catch {}
+  }, [renamingCatValue, onCategoryUpdate])
+
+  const startRenameItem = useCallback((itemId: string, title: string, catId: string) => {
+    setRenamingItemId(itemId)
+    setRenamingItemValue(title)
+    setRenamingItemCatId(catId)
+  }, [])
+
+  const saveRenameItem = useCallback(async (itemId: string) => {
+    const title = renamingItemValue.trim()
+    const catId = renamingItemCatId
+    setRenamingItemId(null)
+    setRenamingItemCatId(null)
+    if (!title || !catId) return
+    try {
+      await fetch(`/api/kb/items/${itemId}/update-meta`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+      setCategoryItems(prev => ({
+        ...prev,
+        [catId]: (prev[catId] || []).map(i => i.id === itemId ? { ...i, title } : i),
+      }))
+    } catch {}
+  }, [renamingItemValue, renamingItemCatId])
+
+  // ── Delete category ───────────────────────────────────────────────────────
+
+  const handleDeleteCategory = useCallback(async (catId: string) => {
+    setContextMenu(null)
+    if (!confirm('Delete this category? Items will move to Uncategorized.')) return
+    try {
+      const res = await fetch(`/api/kb/categories/${catId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setCategories(prev => prev.filter(c => c.id !== catId))
+        onCategoryDelete?.(catId)
+      }
+    } catch {}
+  }, [onCategoryDelete])
+
+  // ── New sub-category ─────────────────────────────────────────────────────
+
+  const handleNewSubCategory = useCallback(async (parentCatId: string) => {
+    setContextMenu(null)
+    const name = prompt('Sub-folder name:')
+    if (!name?.trim()) return
+    try {
+      const res = await fetch('/api/kb/categories/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          icon: 'fas fa-folder',
+          color: '#6366f1',
+          parent_category_id: parentCatId,
+        }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setCategories(prev => [...prev, { ...created, item_count: 0 }])
+        setExpandedCategories(prev => new Set([...prev, parentCatId]))
+      }
+    } catch {}
+  }, [])
+
+  // ── Item Drag & Drop ─────────────────────────────────────────────────────
+
+  const handleDragStart = useCallback((e: React.DragEvent, itemId: string) => {
     e.dataTransfer.setData('text/plain', itemId)
     e.dataTransfer.setData('application/kb-item-id', itemId)
     e.dataTransfer.effectAllowed = 'move'
-    // If in selection mode and this item is selected, drag all selected
     if (selectionMode && selectedIds.has(itemId)) {
       e.dataTransfer.setData('application/kb-item-ids', JSON.stringify([...selectedIds]))
     }
   }, [selectionMode, selectedIds])
 
   const handleDragOverCategory = useCallback((e: React.DragEvent, catId: string) => {
+    // Only for item drops, not category-to-category reparenting
+    if (draggingCatId) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setDragOverCategory(catId)
-  }, [])
+  }, [draggingCatId])
 
   const handleDragOverItem = useCallback((e: React.DragEvent, itemId: string) => {
     e.preventDefault()
@@ -180,11 +325,28 @@ export function KBSidebar({
     e.preventDefault()
     setDragOverCategory(null)
 
-    // Get item IDs
+    // Category reparent takes priority
+    const catId = e.dataTransfer.getData('application/kb-cat-id')
+    if (catId && catId !== targetCategoryId) {
+      try {
+        const res = await fetch(`/api/kb/categories/${catId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parent_category_id: targetCategoryId }),
+        })
+        if (res.ok) {
+          const updated = await res.json()
+          setCategories(prev => prev.map(c => c.id === catId ? { ...c, parent_category_id: targetCategoryId } : c))
+          onCategoryUpdate?.(updated)
+        }
+      } catch {}
+      return
+    }
+
+    // Otherwise move items
     const bulkIds = e.dataTransfer.getData('application/kb-item-ids')
     const singleId = e.dataTransfer.getData('application/kb-item-id')
     const itemIds = bulkIds ? JSON.parse(bulkIds) : singleId ? [singleId] : []
-
     if (itemIds.length === 0) return
 
     try {
@@ -201,14 +363,11 @@ export function KBSidebar({
           body: JSON.stringify({ action: 'move', item_ids: itemIds, category_id: targetCategoryId }),
         })
       }
-      // Refresh items for affected categories
       setCategoryItems(prev => {
         const next = { ...prev }
-        // Remove moved items from old categories
-        for (const catId of Object.keys(next)) {
-          next[catId] = next[catId].filter(i => !itemIds.includes(i.id))
+        for (const cId of Object.keys(next)) {
+          next[cId] = next[cId].filter(i => !itemIds.includes(i.id))
         }
-        // We'll need to reload the target category
         delete next[targetCategoryId]
         return next
       })
@@ -216,7 +375,7 @@ export function KBSidebar({
     } catch (err) {
       console.error('Move failed:', err)
     }
-  }, [loadCategoryItems])
+  }, [loadCategoryItems, onCategoryUpdate, draggingCatId])
 
   const handleDropOnItem = useCallback(async (e: React.DragEvent, parentItemId: string) => {
     e.preventDefault()
@@ -232,7 +391,6 @@ export function KBSidebar({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ parent_id: parentItemId }),
       })
-      // Refresh
       for (const catId of Object.keys(categoryItems)) {
         const items = categoryItems[catId]
         if (items?.some(i => i.id === singleId)) {
@@ -252,14 +410,28 @@ export function KBSidebar({
     }
   }, [categoryItems])
 
-  // Build nested hierarchy for category items
+  // ── Category Drag ────────────────────────────────────────────────────────
+
+  const handleCatDragStart = useCallback((e: React.DragEvent, catId: string) => {
+    e.stopPropagation()
+    e.dataTransfer.setData('application/kb-cat-id', catId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggingCatId(catId)
+  }, [])
+
+  const handleCatDragEnd = useCallback(() => {
+    setDraggingCatId(null)
+    setDragOverCategory(null)
+  }, [])
+
+  // ── Nested hierarchy helpers ─────────────────────────────────────────────
+
   const getNestedItems = useCallback((catId: string, filter: string) => {
     const items = categoryItems[catId] || []
     const filtered = filter
       ? items.filter(item => item.title.toLowerCase().includes(filter.toLowerCase()))
       : items
 
-    // Build parent-child map
     const rootItems = filtered.filter(i => !i.parent_id || !filtered.some(p => p.id === i.parent_id))
     const childMap: Record<string, SidebarItem[]> = {}
     for (const item of filtered) {
@@ -268,11 +440,9 @@ export function KBSidebar({
         childMap[item.parent_id].push(item)
       }
     }
-
     return { rootItems, childMap }
   }, [categoryItems])
 
-  // Build category tree with parent_category_id
   const categoryTree = useMemo(() => {
     const rootCats = categories.filter(c => c.item_count > 0 && !c.parent_category_id)
     const childCatMap: Record<string, Category[]> = {}
@@ -285,7 +455,6 @@ export function KBSidebar({
     return { rootCats, childCatMap }
   }, [categories])
 
-  // Filter categories by search
   const filteredCategories = useMemo(() => {
     if (!sidebarFilter) return categoryTree.rootCats
     const q = sidebarFilter.toLowerCase()
@@ -297,21 +466,21 @@ export function KBSidebar({
     )
   }, [categories, sidebarFilter, categoryItems, categoryTree.rootCats])
 
-  // Check if an item is active
   const isItemActive = (itemId: string) => pathname === `/kb/item/${itemId}`
   const isCategoryActive = (slug: string) => pathname === `/kb/${slug}`
 
-  // ── Render a single item row ──────────────────────────────────────────
+  // ── Render item row ──────────────────────────────────────────────────────
 
-  const renderItem = (item: SidebarItem, childMap: Record<string, SidebarItem[]>, depth: number = 0) => {
+  const renderItem = (item: SidebarItem, catId: string, childMap: Record<string, SidebarItem[]>, depth: number = 0) => {
     const hasChildren = (childMap[item.id] || []).length > 0
     const isExpanded = expandedItems.has(item.id)
+    const isRenaming = renamingItemId === item.id
 
     return (
       <div key={item.id}>
         <div
-          draggable={!selectionMode}
-          onDragStart={(e) => handleDragStart(e, item.id, item.title)}
+          draggable={!selectionMode && !isRenaming}
+          onDragStart={(e) => handleDragStart(e, item.id)}
           onDragOver={(e) => handleDragOverItem(e, item.id)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDropOnItem(e, item.id)}
@@ -324,7 +493,6 @@ export function KBSidebar({
               : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/50 hover:text-gray-900 dark:hover:text-gray-200'}
           `}
         >
-          {/* Selection checkbox */}
           {selectionMode && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleSelection(item.id) }}
@@ -338,7 +506,6 @@ export function KBSidebar({
             </button>
           )}
 
-          {/* Expand children toggle */}
           {hasChildren ? (
             <button
               onClick={(e) => {
@@ -360,96 +527,185 @@ export function KBSidebar({
             <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700 flex-shrink-0 mx-1" />
           )}
 
-          {/* Item link */}
-          <Link
-            href={`/kb/item/${item.id}`}
-            className="truncate flex-1"
-            onClick={(e) => { if (selectionMode) { e.preventDefault(); onToggleSelection(item.id) } }}
-          >
-            {item.title}
-          </Link>
-
-          {/* Favorite toggle */}
-          {!selectionMode && (
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(item.id) }}
-              className={`flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity p-0.5 ${favorites.has(item.id) ? 'opacity-100 text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
-              title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}
+          {/* Inline rename input OR link */}
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              value={renamingItemValue}
+              onChange={(e) => setRenamingItemValue(e.target.value)}
+              onBlur={() => saveRenameItem(item.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveRenameItem(item.id)
+                if (e.key === 'Escape') { setRenamingItemId(null) }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 bg-white dark:bg-gray-800 border border-amber-400 rounded px-1 py-0 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-400/50 min-w-0"
+            />
+          ) : (
+            <Link
+              href={`/kb/item/${item.id}`}
+              className="truncate flex-1"
+              onDoubleClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                startRenameItem(item.id, item.title, catId)
+              }}
+              onClick={(e) => { if (selectionMode) { e.preventDefault(); onToggleSelection(item.id) } }}
             >
-              <svg className="w-3 h-3" fill={favorites.has(item.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
-            </button>
+              {item.title}
+            </Link>
+          )}
+
+          {/* Favorite + tag count */}
+          {!selectionMode && !isRenaming && (
+            <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+              {item.tags && item.tags.length > 0 && (
+                <span className="text-[9px] text-gray-400 dark:text-gray-600 px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full">
+                  {item.tags.length}
+                </span>
+              )}
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(item.id) }}
+                className={`p-0.5 ${favorites.has(item.id) ? 'opacity-100 text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
+                title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <svg className="w-3 h-3" fill={favorites.has(item.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Children (nested sub-pages) */}
         {hasChildren && isExpanded && (
           <div className="ml-1">
-            {childMap[item.id].map(child => renderItem(child, childMap, depth + 1))}
+            {childMap[item.id].map(child => renderItem(child, catId, childMap, depth + 1))}
           </div>
         )}
       </div>
     )
   }
 
-  // ── Render a category row ─────────────────────────────────────────────
+  // ── Render category row ──────────────────────────────────────────────────
 
   const renderCategory = (cat: Category, depth: number = 0) => {
     const isExpanded = expandedCategories.has(cat.id)
     const isActive = isCategoryActive(cat.slug)
     const isLoading = loadingCategories.has(cat.id)
+    const isDraggingThis = draggingCatId === cat.id
+    const isDropTarget = dragOverCategory === cat.id
+    const isRenaming = renamingCatId === cat.id
     const icon = getCatIcon(cat.icon)
     const childCats = categoryTree.childCatMap[cat.id] || []
     const { rootItems, childMap } = getNestedItems(cat.id, sidebarFilter)
 
     return (
-      <div key={cat.id} className="mb-0.5">
+      <div
+        key={cat.id}
+        className={`mb-0.5 transition-opacity ${isDraggingThis ? 'opacity-40' : ''}`}
+      >
         {/* Category Row */}
         <div
+          draggable
+          onDragStart={(e) => handleCatDragStart(e, cat.id)}
+          onDragEnd={handleCatDragEnd}
           onDragOver={(e) => handleDragOverCategory(e, cat.id)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDropOnCategory(e, cat.id)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setContextMenu({ x: e.clientX, y: e.clientY, catId: cat.id, catName: cat.name })
+          }}
           className={`
             flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer group transition-all
             ${depth > 0 ? 'ml-3' : ''}
-            ${dragOverCategory === cat.id ? 'bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-400 ring-inset scale-[1.01]' : ''}
-            ${isActive
+            ${isDropTarget && !draggingCatId ? 'bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-400 ring-inset scale-[1.01]' : ''}
+            ${draggingCatId && isDropTarget ? 'bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-400 ring-inset' : ''}
+            ${isActive && !isRenaming
               ? 'bg-amber-50 dark:bg-amber-900/15 text-amber-800 dark:text-amber-300'
               : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900/60'}
           `}
         >
-          {/* Expand/collapse chevron */}
-          <button
-            onClick={(e) => { e.stopPropagation(); toggleCategory(cat.id) }}
-            className="flex-shrink-0 p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <svg
-              className={`w-3 h-3 text-gray-400 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          {/* Drag handle + expand chevron */}
+          <div className="flex-shrink-0 flex items-center gap-0.5">
+            {/* Drag handle — visible on hover */}
+            <span className="opacity-0 group-hover:opacity-40 cursor-grab active:cursor-grabbing text-gray-400 select-none text-[10px] leading-none mr-0.5">⠿</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleCategory(cat.id) }}
+              className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+              <svg
+                className={`w-3 h-3 text-gray-400 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
 
-          {/* Category link */}
-          <Link
-            href={`/kb/${cat.slug}`}
-            className="flex items-center gap-2 flex-1 min-w-0"
-            onClick={() => { if (!isExpanded) toggleCategory(cat.id) }}
-          >
-            <span className="text-sm flex-shrink-0">{icon}</span>
-            <span className="text-xs font-medium truncate">{cat.name}</span>
-            <span className="text-[10px] text-gray-400 dark:text-gray-600 tabular-nums flex-shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-              {cat.item_count}
-            </span>
-          </Link>
+          {/* Category icon */}
+          <span className="text-sm flex-shrink-0">{icon}</span>
+
+          {/* Category name — inline rename or link */}
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              value={renamingCatValue}
+              onChange={(e) => setRenamingCatValue(e.target.value)}
+              onBlur={() => saveRenameCategory(cat.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveRenameCategory(cat.id)
+                if (e.key === 'Escape') setRenamingCatId(null)
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 bg-white dark:bg-gray-800 border border-amber-400 rounded px-1.5 py-0 text-xs font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-400/50 min-w-0"
+            />
+          ) : (
+            <Link
+              href={`/kb/${cat.slug}`}
+              className="flex items-center gap-1 flex-1 min-w-0"
+              onDoubleClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                startRenameCategory(cat.id, cat.name)
+              }}
+              onClick={() => { if (!isExpanded) toggleCategory(cat.id) }}
+            >
+              <span className="text-xs font-medium truncate">{cat.name}</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-600 tabular-nums flex-shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                {cat.item_count}
+              </span>
+            </Link>
+          )}
+
+          {/* Quick actions — show on hover */}
+          {!isRenaming && (
+            <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleNewSubCategory(cat.id) }}
+                className="p-0.5 rounded text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                title="New sub-folder"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); startRenameCategory(cat.id, cat.name) }}
+                className="p-0.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                title="Rename"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Expanded Content */}
         {isExpanded && (
           <div className="ml-5 pl-2.5 border-l border-gray-200 dark:border-gray-800 mt-0.5 mb-1">
-            {/* Child categories */}
             {childCats.map(cc => renderCategory(cc, depth + 1))}
 
             {isLoading && (
@@ -465,7 +721,7 @@ export function KBSidebar({
               </div>
             )}
 
-            {rootItems.map(item => renderItem(item, childMap))}
+            {rootItems.map(item => renderItem(item, cat.id, childMap))}
           </div>
         )}
       </div>
@@ -502,7 +758,6 @@ export function KBSidebar({
               <span>Knowledge Base</span>
             </Link>
             <div className="flex items-center gap-0.5">
-              {/* Selection mode toggle */}
               <button
                 onClick={onToggleSelectionMode}
                 className={`p-1.5 rounded-lg transition-colors ${selectionMode ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
@@ -618,8 +873,46 @@ export function KBSidebar({
               ⌘K
             </kbd>
           </div>
+          <p className="mt-1.5 text-[9px] text-gray-300 dark:text-gray-700">
+            Double-click to rename · Drag to move · Right-click for options
+          </p>
         </div>
       </aside>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed z-[200] py-1 w-44 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 text-xs"
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider truncate border-b border-gray-100 dark:border-gray-800 mb-1">
+            {contextMenu.catName}
+          </div>
+          <button
+            onClick={() => startRenameCategory(contextMenu.catId, contextMenu.catName)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            Rename
+          </button>
+          <button
+            onClick={() => handleNewSubCategory(contextMenu.catId)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+            New sub-folder
+          </button>
+          <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+          <button
+            onClick={() => handleDeleteCategory(contextMenu.catId)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            Delete category
+          </button>
+        </div>
+      )}
     </>
   )
 }
