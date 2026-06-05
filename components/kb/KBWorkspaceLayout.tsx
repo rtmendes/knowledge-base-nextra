@@ -85,6 +85,14 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
     setCategories(prev => [...prev, { ...newCategory, item_count: newCategory.item_count || 0 }])
   }, [])
 
+  const handleCategoryUpdate = useCallback((updated: any) => {
+    setCategories(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))
+  }, [])
+
+  const handleCategoryDelete = useCallback((catId: string) => {
+    setCategories(prev => prev.filter(c => c.id !== catId))
+  }, [])
+
   const handleToggleSelection = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -121,6 +129,8 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
       selectedIds={selectedIds}
       onToggleSelection={handleToggleSelection}
       onToggleSelectionMode={handleToggleSelectionMode}
+      onCategoryUpdate={handleCategoryUpdate}
+      onCategoryDelete={handleCategoryDelete}
     />
   )
 
