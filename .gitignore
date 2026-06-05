@@ -1,7 +1,0 @@
-node_modules/
-.next/
-.vercel/
-*.log
-.DS_Store
-.vercel
-.env.local
