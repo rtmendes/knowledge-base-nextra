@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delta Jobs — Opportunity Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a0e1a;
+    --navy-2: #0f1629;
+    --navy-3: #151d35;
+    --navy-4: #1c2540;
+    --purple: #7c3aed;
+    --purple-light: #9d5cf5;
+    --purple-dim: rgba(124,58,237,0.15);
+    --gold: #f59e0b;
+    --gold-dim: rgba(245,158,11,0.15);
+    --green: #10b981;
+    --green-dim: rgba(16,185,129,0.15);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.15);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,0.15);
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --border: rgba(255,255,255,0.07);
+    --border-2: rgba(255,255,255,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 13px;
+  }
+</style>
+  /* LAYOUT */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px;
+    background: var(--navy-2);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--purple), var(--purple-light));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; color: white;
+  }
+  .logo-text { font-size: 17px; font-weight: 700; color: var(--text); }
+  .logo-text span { color: var(--purple-light); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .api-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px;
+    background: var(--green-dim); border: 1px solid rgba(16,185,129,0.3);
+    font-size: 11px; color: var(--green); font-weight: 500;
+  }
+  .api-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .btn {
+    padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--purple); color: white; }
+  .btn-primary:hover { background: var(--purple-light); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); }
+  .btn-ghost:hover { background: var(--navy-3); color: var(--text); }
+  .main { padding: 24px 28px; max-width: 1600px; margin: 0 auto; }
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .kpi-card {
+    background: var(--navy-2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px;
+    position: relative; overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .kpi-card:hover { transform: translateY(-2px); border-color: var(--border-2); }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .kpi-card.purple::before { background: linear-gradient(90deg, var(--purple), var(--purple-light)); }
+  .kpi-card.gold::before { background: linear-gradient(90deg, var(--gold), #fbbf24); }
+  .kpi-card.green::before { background: linear-gradient(90deg, var(--green), #34d399); }
+  .kpi-card.blue::before { background: linear-gradient(90deg, var(--blue), #60a5fa); }
+  .kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+  .kpi-value { font-size: 30px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+  .kpi-sub { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
+  .kpi-sub .up { color: var(--green); } .kpi-sub .down { color: var(--red); }
+  .kpi-icon {
+    position: absolute; right: 18px; top: 18px;
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .kpi-card.purple .kpi-icon { background: var(--purple-dim); }
+  .kpi-card.gold .kpi-icon { background: var(--gold-dim); }
+  .kpi-card.green .kpi-icon { background: var(--green-dim); }
+  .kpi-card.blue .kpi-icon { background: var(--blue-dim); }
+  /* TABS */
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--navy-2); border: 1px solid var(--border); border-radius: 10px; padding: 4px; width: fit-content; }
+  .tab { padding: 7px 18px; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text-muted); transition: all 0.2s; border: none; background: transparent; font-family: 'Inter', sans-serif; }
+  .tab.active { background: var(--purple); color: white; }
+  .tab:hover:not(.active) { color: var(--text); background: var(--navy-3); }
+  /* FILTER BAR */
+  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--navy-2); border: 1px solid var(--border-2);
+    border-radius: 8px; padding: 8px 14px; flex: 1; min-width: 200px;
+  }
+  .search-box input { background: none; border: none; outline: none; color: var(--text); font-family: 'Inter', sans-serif; font-size: 12px; width: 100%; }
+  .search-box input::placeholder { color: var(--text-muted); }
+  .filter-select {
+    background: var(--navy-2); border: 1px solid var(--border-2); border-radius: 8px;
+    padding: 8px 12px; color: var(--text); font-family: 'Inter', sans-serif;
+    font-size: 12px; cursor: pointer; outline: none;
+  }
+  /* CHART SECTION */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .section-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .section-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .chart-card { background: var(--navy-2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 24px; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 12px; height: 120px; padding-top: 10px; }
+  .chart-bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .chart-bar-wrap { width: 100%; display: flex; align-items: flex-end; justify-content: center; height: 100px; }
+  .chart-bar {
+    width: 70%; border-radius: 6px 6px 0 0; position: relative;
+    transition: opacity 0.2s; cursor: pointer;
+    min-height: 8px;
+  }
+  .chart-bar:hover { opacity: 0.85; }
+  .chart-bar-label { font-size: 10px; color: var(--text-muted); text-align: center; }
+  .chart-bar-val { font-size: 10px; color: var(--text-dim); text-align: center; }
+  .chart-bar.prospecting { background: linear-gradient(180deg, #64748b, #475569); }
+  .chart-bar.qualified { background: linear-gradient(180deg, var(--blue), #2563eb); }
+  .chart-bar.proposal { background: linear-gradient(180deg, var(--purple), #6d28d9); }
+  .chart-bar.negotiation { background: linear-gradient(180deg, var(--gold), #d97706); }
+  .chart-bar.won { background: linear-gradient(180deg, var(--green), #059669); }
+  /* KANBAN */
+  .kanban { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+  .kanban-col { background: var(--navy-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .kanban-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .kanban-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; }
+  .kanban-count { font-size: 10px; background: var(--navy-4); padding: 2px 8px; border-radius: 10px; color: var(--text-muted); }
+  .kanban-card {
+    background: var(--navy-3); border: 1px solid var(--border); border-radius: 9px;
+    padding: 12px; margin-bottom: 8px; cursor: pointer;
+    transition: transform 0.15s, border-color 0.2s;
+  }
+  .kanban-card:hover { transform: translateY(-2px); border-color: var(--purple); }
+  .kanban-company { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .kanban-role { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+  .kanban-meta { display: flex; align-items: center; justify-content: space-between; }
+  .score-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
+  .score-high { background: var(--green-dim); color: var(--green); }
+  .score-mid { background: var(--gold-dim); color: var(--gold); }
+  .score-low { background: rgba(100,116,139,0.2); color: #94a3b8; }
+  .kanban-value { font-size: 10px; color: var(--gold); font-weight: 600; }
+  /* TABLE */
+  .table-card { background: var(--navy-2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th { padding: 12px 16px; text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); background: var(--navy-3); border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 12px 16px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--navy-3); }
+  .company-cell { display: flex; align-items: center; gap: 9px; }
+  .company-avatar { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .company-name { font-weight: 600; color: var(--text); font-size: 12px; }
+  .company-type { font-size: 10px; color: var(--text-muted); }
+  .status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+  .status-prospecting { background: rgba(100,116,139,0.2); color: #94a3b8; }
+  .status-qualified { background: var(--blue-dim); color: var(--blue); }
+  .status-proposal { background: var(--purple-dim); color: var(--purple-light); }
+  .status-negotiation { background: var(--gold-dim); color: var(--gold); }
+  .status-won { background: var(--green-dim); color: var(--green); }
+  .status-lost { background: var(--red-dim); color: var(--red); }
+  .loading-overlay { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; gap: 14px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border-2); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .panel-hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">Δ</div>
+    <div class="logo-text">Delta<span>Jobs</span> CRM</div>
+  </div>
+  <div class="topbar-right">
+    <div class="api-badge"><div class="dot"></div> delta.insightprofit.live</div>
+    <button class="btn btn-ghost" onclick="refreshData()">↻ Refresh</button>
+    <button class="btn btn-primary">+ New Opportunity</button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card purple">
+      <div class="kpi-icon">🎯</div>
+      <div class="kpi-label">Total Opportunities</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-sub"><span class="up">↑ 12%</span> vs last month</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-label">Active Pipeline</div>
+      <div class="kpi-value" id="kpi-active">—</div>
+      <div class="kpi-sub"><span class="up">↑ 5</span> new this week</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-label">Closed Won</div>
+      <div class="kpi-value" id="kpi-won">—</div>
+      <div class="kpi-sub"><span class="up">↑ 3</span> this quarter</div>
+    </div>
+    <div class="kpi-card gold">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Revenue Tracked</div>
+      <div class="kpi-value" id="kpi-revenue">—</div>
+      <div class="kpi-sub"><span class="up">↑ 18%</span> pipeline growth</div>
+    </div>
+  </div>
+
+  <!-- PIPELINE CHART -->
+  <div class="chart-card">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Pipeline Value by Stage</div>
+        <div class="section-sub">Weighted opportunity value across all active stages</div>
+      </div>
+    </div>
+    <div class="chart-bars" id="pipeline-chart">
+      <div class="chart-bar-group">
+        <div class="chart-bar-wrap"><div class="chart-bar prospecting" style="height:35%"></div></div>
+        <div class="chart-bar-val">$42k</div>
+        <div class="chart-bar-label">Prospecting</div>
+      </div>
+      <div class="chart-bar-group">
+        <div class="chart-bar-wrap"><div class="chart-bar qualified" style="height:55%"></div></div>
+        <div class="chart-bar-val">$68k</div>
+        <div class="chart-bar-label">Qualified</div>
+      </div>
+      <div class="chart-bar-group">
+        <div class="chart-bar-wrap"><div class="chart-bar proposal" style="height:80%"></div></div>
+        <div class="chart-bar-val">$98k</div>
+        <div class="chart-bar-label">Proposal</div>
+      </div>
+      <div class="chart-bar-group">
+        <div class="chart-bar-wrap"><div class="chart-bar negotiation" style="height:60%"></div></div>
+        <div class="chart-bar-val">$74k</div>
+        <div class="chart-bar-label">Negotiation</div>
+      </div>
+      <div class="chart-bar-group">
+        <div class="chart-bar-wrap"><div class="chart-bar won" style="height:100%"></div></div>
+        <div class="chart-bar-val">$124k</div>
+        <div class="chart-bar-label">Closed Won</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('kanban', this)">Kanban Board</button>
+    <button class="tab" onclick="switchTab('table', this)">Table View</button>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <div class="search-box">
+      <span style="color:var(--text-muted)">🔍</span>
+      <input type="text" placeholder="Search companies, roles..." oninput="filterData(this.value)" id="search-input">
+    </div>
+    <select class="filter-select" onchange="filterByStatus(this.value)" id="status-filter">
+      <option value="">All Statuses</option>
+      <option value="Prospecting">Prospecting</option>
+      <option value="Qualified">Qualified</option>
+      <option value="Proposal">Proposal</option>
+      <option value="Negotiation">Negotiation</option>
+      <option value="Closed Won">Closed Won</option>
+      <option value="Closed Lost">Closed Lost</option>
+    </select>
+    <select class="filter-select" onchange="filterByScore(this.value)" id="score-filter">
+      <option value="">All Scores</option>
+      <option value="high">High (80+)</option>
+      <option value="mid">Medium (50-79)</option>
+      <option value="low">Low (0-49)</option>
+    </select>
+    <select class="filter-select">
+      <option>Last 30 days</option>
+      <option>Last 60 days</option>
+      <option>Last 90 days</option>
+      <option>All time</option>
+    </select>
+  </div>
+
+  <!-- KANBAN VIEW -->
+  <div id="view-kanban">
+    <div class="kanban" id="kanban-board">
+      <!-- Rendered by JS -->
+    </div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div id="view-table" class="panel-hidden">
+    <div class="table-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Role / Title</th>
+            <th>Status</th>
+            <th>Score</th>
+            <th>Value</th>
+            <th>Next Action</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Rendered by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API_BASE = 'https://delta.insightprofit.live/api';
+
+const MOCK_DATA = [
+  { id:1, company:'Accenture Federal', role:'AI Solutions Architect', status:'Negotiation', score:92, value:'$85,000', action:'Send revised proposal', updated:'Apr 11', color:'#7c3aed' },
+  { id:2, company:'Deloitte Digital', role:'ML Engineering Lead', status:'Proposal', score:87, value:'$72,000', action:'Follow up on deck', updated:'Apr 10', color:'#3b82f6' },
+  { id:3, company:'Google Cloud', role:'Partner Engineer', status:'Qualified', score:78, value:'$95,000', action:'Schedule tech interview', updated:'Apr 9', color:'#10b981' },
+  { id:4, company:'Microsoft Azure', role:'Cloud Solutions Architect', status:'Prospecting', score:65, value:'$110,000', action:'Connect on LinkedIn', updated:'Apr 8', color:'#f59e0b' },
+  { id:5, company:'Palantir Technologies', role:'Forward Deployed Eng', status:'Closed Won', score:95, value:'$120,000', action:'Onboarding call set', updated:'Apr 5', color:'#10b981' },
+  { id:6, company:'Scale AI', role:'Solutions Engineer', status:'Proposal', score:82, value:'$88,000', action:'Negotiate equity', updated:'Apr 7', color:'#7c3aed' },
+  { id:7, company:'Anthropic', role:'Research Engineer', status:'Qualified', score:90, value:'$145,000', action:'Technical assessment', updated:'Apr 6', color:'#ef4444' },
+  { id:8, company:'OpenAI', role:'Developer Relations', status:'Prospecting', score:55, value:'$105,000', action:'Cold outreach', updated:'Apr 3', color:'#10b981' },
+  { id:9, company:'Databricks', role:'Sales Engineer', status:'Negotiation', score:85, value:'$98,000', action:'Final offer review', updated:'Apr 11', color:'#3b82f6' },
+  { id:10, company:'Snowflake', role:'Principal Architect', status:'Closed Lost', score:40, value:'$130,000', action:'Post-mortem analysis', updated:'Mar 28', color:'#64748b' },
+  { id:11, company:'Nvidia', role:'AI Infrastructure Lead', status:'Prospecting', score:70, value:'$115,000', action:'Initial coffee chat', updated:'Apr 2', color:'#78716c' },
+  { id:12, company:'AWS', role:'Solutions Architect', status:'Closed Won', score:91, value:'$102,000', action:'Start date confirmed', updated:'Mar 30', color:'#f59e0b' },
+];
+
+let filteredData = [...MOCK_DATA];
+let activeTab = 'kanban';
+
+const STAGES = ['Prospecting','Qualified','Proposal','Negotiation','Closed Won'];
+const STAGE_COLORS = {
+  'Prospecting':'#64748b','Qualified':'#3b82f6','Proposal':'#7c3aed',
+  'Negotiation':'#f59e0b','Closed Won':'#10b981','Closed Lost':'#ef4444'
+};
+
+function getScoreClass(s){ return s>=80?'score-high':s>=50?'score-mid':'score-low'; }
+function getStatusClass(s){ return 'status-'+s.toLowerCase().replace(' ','-').replace('closed-won','won').replace('closed-lost','lost'); }
+
+function renderKanban(data) {
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = '';
+  STAGES.forEach(stage => {
+    const cards = data.filter(d => d.status === stage);
+    const col = document.createElement('div');
+    col.className = 'kanban-col';
+    col.innerHTML = `
+      <div class="kanban-header">
+        <div class="kanban-title" style="color:${STAGE_COLORS[stage]}">${stage}</div>
+        <div class="kanban-count">${cards.length}</div>
+      </div>
+      ${cards.map(c => `
+        <div class="kanban-card" onclick="showDetail(${c.id})">
+          <div class="company-cell" style="margin-bottom:6px">
+            <div class="company-avatar" style="background:${c.color}22;color:${c.color}">${c.company[0]}</div>
+            <div>
+              <div class="company-name">${c.company}</div>
+              <div class="company-type">${c.role}</div>
+            </div>
+          </div>
+          <div class="kanban-meta">
+            <span class="score-badge ${getScoreClass(c.score)}">⚡ ${c.score}</span>
+            <span class="kanban-value">${c.value}</span>
+          </div>
+        </div>
+      `).join('')}
+      ${cards.length===0?`<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:11px">No opportunities</div>`:''}
+    `;
+    board.appendChild(col);
+  });
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = data.map(c => `
+    <tr>
+      <td>
+        <div class="company-cell">
+          <div class="company-avatar" style="background:${c.color}22;color:${c.color}">${c.company[0]}</div>
+          <div><div class="company-name">${c.company}</div></div>
+        </div>
+      </td>
+      <td>${c.role}</td>
+      <td><span class="status-pill ${getStatusClass(c.status)}">${c.status}</span></td>
+      <td><span class="score-badge ${getScoreClass(c.score)}">⚡ ${c.score}</span></td>
+      <td style="color:var(--gold);font-weight:600">${c.value}</td>
+      <td>${c.action}</td>
+      <td style="color:var(--text-muted)">${c.updated}</td>
+    </tr>
+  `).join('');
+}
+
+function renderAll(data) {
+  renderKanban(data);
+  renderTable(data);
+  document.getElementById('kpi-total').textContent = data.length;
+  document.getElementById('kpi-active').textContent = data.filter(d=>!['Closed Won','Closed Lost'].includes(d.status)).length;
+  document.getElementById('kpi-won').textContent = data.filter(d=>d.status==='Closed Won').length;
+  const rev = data.filter(d=>d.status==='Closed Won').reduce((s,c)=>s+parseInt(c.value.replace(/[$,]/g,'')),0);
+  document.getElementById('kpi-revenue').textContent = '$'+Math.round(rev/1000)+'k';
+}
+
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('view-kanban').classList.toggle('panel-hidden', tab!=='kanban');
+  document.getElementById('view-table').classList.toggle('panel-hidden', tab!=='table');
+}
+
+function filterData(query) {
+  const status = document.getElementById('status-filter').value;
+  const score = document.getElementById('score-filter').value;
+  filteredData = MOCK_DATA.filter(d => {
+    const q = query.toLowerCase();
+    const matchQ = !q || d.company.toLowerCase().includes(q) || d.role.toLowerCase().includes(q);
+    const matchS = !status || d.status===status;
+    const matchSc = !score || (score==='high'&&d.score>=80)||(score==='mid'&&d.score>=50&&d.score<80)||(score==='low'&&d.score<50);
+    return matchQ && matchS && matchSc;
+  });
+  renderAll(filteredData);
+}
+
+function filterByStatus(v){ filterData(document.getElementById('search-input').value); }
+function filterByScore(v){ filterData(document.getElementById('search-input').value); }
+function showDetail(id){ console.log('Detail for', id); }
+
+async function refreshData() {
+  try {
+    const res = await fetch(API_BASE+'/opportunities', { signal: AbortSignal.timeout(5000) });
+    if(!res.ok) throw new Error('API error');
+    const data = await res.json();
+    filteredData = data;
+    renderAll(data);
+  } catch(e) {
+    // API not reachable — use mock data silently
+    renderAll(MOCK_DATA);
+  }
+}
+
+// INIT
+renderAll(MOCK_DATA);
+// Attempt live API in background
+refreshData();
+</script>
+</body>
+</html>

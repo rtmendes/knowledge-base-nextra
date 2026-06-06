@@ -1,0 +1,82 @@
+---
+title: "Admin Import Kb Items Route"
+slug: "admin-import-kb-items-route"
+status: active
+---
+
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
+
+// Admin bulk import route — uses service role key, protected by shared secret
+// POST /api/admin/import-kb-items
+export async function POST(request: NextRequest) {
+  // Verify shared secret
+  const authHeader = request.headers.get('x-admin-secret');
+  const expectedSecret = process.env.ADMIN_IMPORT_SECRET || 'insightprofit-admin-2026';
+
+  if (authHeader !== expectedSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { items } = body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'items array required' }, { status: 400 });
+    }
+
+    // Get the admin user_id from existing items
+    const { data: sampleItem } = await supabaseAdmin
+      .from('knowledge_items')
+      .select('user_id')
+      .not('user_id', 'is', null)
+      .limit(1)
+      .single();
+
+    const adminUserId = sampleItem?.user_id;
+    if (!adminUserId) {
+      return NextResponse.json({ error: 'Could not determine admin user_id' }, { status: 500 });
+    }
+
+    const results = [];
+    for (const item of items) {
+      const { data, error } = await supabaseAdmin
+        .from('knowledge_items')
+        .upsert(
+          {
+            title: item.title,
+            slug: item.slug,
+            item_type: item.item_type,
+            category_id: item.category_id,
+            content: item.content || '',
+            summary: item.summary || item.title,
+            tags: item.tags || [],
+            status: 'active',
+            user_id: adminUserId,
+            word_count: item.content ? Math.round(item.content.split(/\s+/).length) : 0,
+            metadata: item.metadata || { source: 'slack_import', import_date: new Date().toISOString().split('T')[0] },
+          },
+          { onConflict: 'slug' }
+        )
+        .select()
+        .single();
+
+      if (error) {
+        results.push({ slug: item.slug, error: error.message });
+      } else {
+        results.push({ slug: item.slug, id: data?.id, success: true });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      imported: results.filter(r => r.success).length,
+      failed: results.filter(r => r.error).length,
+      results,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

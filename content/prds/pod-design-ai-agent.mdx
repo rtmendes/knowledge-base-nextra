@@ -1,0 +1,279 @@
+---
+title: POD Design AI Agent (600 Products) PRD
+description: Product Requirements Document for an automated pipeline generating 600 Printify/ShineOn products using AI image generation.
+status: active-build
+category: PRD
+project: pod-design-ai-agent
+priority: high
+revenue_target: $1000/day
+revenue_model: volume-pod-sales
+platform: Printify, ShineOn
+product_count: 600
+clickup_task: 86e0w7n25
+created_at: "2026-04-13"
+tags:
+  - pod
+  - prd
+  - ai-agent
+  - automation
+  - printify
+  - shineon
+  - image-generation
+---
+
+# POD Design AI Agent (600 Products) — PRD
+
+## Overview & Business Goal
+
+Build an AI-powered pipeline that autonomously generates, uploads, and lists 600 print-on-demand products across Printify and ShineOn. The agent handles niche research → design generation → product creation → listing copy → publishing in a near-zero-human-touch workflow.
+
+**Primary Goal:** $1,000/day in POD revenue from volume — 600 products across multiple niches, platforms, and product types, generating a long-tail of daily sales.
+
+**The Math:** 600 products × avg $2/day/product × 80% at target velocity = ~$1,000/day. Even at $0.50/day per product average, 600 SKUs = $300/day baseline.
+
+**Why Volume POD Works:** Most Etsy/Printify/ShineOn sellers have 10–50 products. 600 products means 600 chances to rank, 600 SEO targets, 600 social posts. AI makes this economically viable by eliminating design labor cost.
+
+---
+
+## Revenue Model
+
+| Component | Details |
+|---|---|
+| Platform 1 | Printify → Etsy (apparel, mugs, home decor) |
+| Platform 2 | ShineOn → Etsy/ShineOn native (jewelry) |
+| Avg retail price | $22–$55 |
+| Avg margin per sale | $8–$25 |
+| Target: 600 products | $1,000/day at ~$1.67 avg/product/day |
+| Breakeven timeline | Month 2 (SEO takes 4–6 weeks to kick in) |
+
+**Traffic Strategy:** Primarily organic (Etsy SEO + Pinterest + TikTok organic) with paid ads layered onto proven sellers.
+
+---
+
+## Current State
+
+### What's Built
+- Concept defined (600 product target)
+- ShineOn account (from ShineOn Jewelry PRD)
+- Printify account (assume active — confirm)
+
+### What's Missing
+- AI pipeline not built
+- No niche research framework
+- No image generation workflow
+- No bulk product upload system
+- No Etsy store optimized for volume
+- No automated listing copy generation
+
+---
+
+## Pipeline Architecture
+
+```
+Niche Research → Prompt Engineering → AI Image Generation
+       ↓
+Design QA → Product Mockup Generation → Listing Copy Generation
+       ↓
+Bulk Upload to Printify/ShineOn → Publish to Etsy/Platform
+       ↓
+Performance Monitoring → Pause/Scale Decisions
+```
+
+### AI Tools in Pipeline
+- **Image Generation:** Midjourney, DALL-E 3, or Ideogram (via API)
+- **Listing Copy:** PopeBot / Claude API
+- **Niche Research:** SEO keyword tools + bestseller scraping
+- **Bulk Upload:** Printify API + ShineOn API
+- **Automation Orchestration:** n8n or Make.com
+
+---
+
+## Niche Framework — 600 Products Breakdown
+
+| Niche Category | Products | Platform | Avg Price |
+|---|---|---|---|
+| Motivational/Inspirational | 80 | Printify → Etsy | $22–$28 |
+| Mom/Family Personalized | 80 | ShineOn → Etsy | $40–$55 |
+| Dog/Pet Lover | 60 | Printify → Etsy | $24–$32 |
+| Professions (nurse, teacher, etc.) | 60 | Printify → Etsy | $24–$30 |
+| Memorial/Grief | 50 | ShineOn → Etsy | $45–$60 |
+| Hobbies (hiking, fishing, yoga) | 60 | Printify → Etsy | $24–$30 |
+| Couples/Anniversary | 50 | ShineOn + Printify | $35–$55 |
+| Seasonal (holidays, birthdays) | 60 | Printify → Etsy | $22–$28 |
+| Funny/Sarcastic | 50 | Printify → Etsy | $22–$26 |
+| Faith/Religious | 50 | ShineOn + Printify | $28–$45 |
+| **TOTAL** | **600** | | |
+
+---
+
+## Implementation Plan
+
+### Phase 1 — Pipeline Build & First 50 Products (This Week, Days 1–7)
+
+**Goal:** Working pipeline producing 50 products published by Day 7.
+
+1. **Set Up Core Infrastructure**
+   - Confirm Printify account + connect to Etsy store
+   - Confirm ShineOn account + Etsy connection
+   - Set up n8n or Make.com workflow automation account
+   - Install/configure image generation API access (Ideogram API recommended for POD — no commercial restrictions)
+
+2. **Build Niche Research Module**
+   - Scrape Etsy bestsellers in top 10 niches (eRank or Alura tool)
+   - Extract top 50 keyword phrases per niche
+   - Store in structured Google Sheet or Airtable (PopeBot-readable)
+   - Priority niches for Week 1: Motivational, Dog Lover, Nurse/Teacher
+
+3. **Design Generation Workflow (50 products)**
+   - Create prompt templates per niche (PopeBot generates prompt library)
+   - Generate 5 design variations per niche × 10 niches = 50 designs
+   - QA each design: check text legibility, print safety, no copyright issues
+   - Export in correct format: PNG, 300dpi, correct dimensions per product type
+
+4. **Printify Bulk Upload**
+   - Use Printify API to create products programmatically
+   - Product types for Week 1: Classic T-shirt, Mug, Tote bag
+   - Set pricing: 2.5–3x base cost
+   - Enable all size variants for apparel
+
+5. **Listing Copy Generation (PopeBot)**
+   - Title: keyword + emotional hook + product type (max 140 chars)
+   - Description: 150–200 words, benefit-led, includes all keywords
+   - Tags: 13 tags per listing (Etsy max), drawn from niche keyword research
+   - Generate for all 50 products in one batch
+
+6. **Publish to Etsy**
+   - Upload via Printify's Etsy integration (auto-sync)
+   - QA check: 5 random products for accuracy
+   - Confirm shipping profiles set
+
+**Success Condition for Phase 1:** 50 products live on Etsy, pipeline documented.
+
+---
+
+### Phase 2 — Scale to 300 Products (Next 2 Weeks, Days 8–21)
+
+**Goal:** 300 products live, first organic sales rolling in.
+
+1. **Pipeline Acceleration**
+   - Increase batch size: 25 products/day target
+   - Add remaining 7 niche categories
+   - Automate QA checklist (AI checks designs for text errors and print safety)
+
+2. **ShineOn Integration**
+   - Add 50 jewelry products (from ShineOn niche: Mom, Memorial, Couples)
+   - Use ShineOn API for programmatic product creation
+   - Link to same Etsy store or create dedicated jewelry store
+
+3. **Pinterest Auto-Publishing**
+   - Build n8n workflow: new product published → auto-generate Pinterest pin
+   - Pin description generated by PopeBot from listing copy
+   - Target: 5 pins/day to Pinterest boards
+
+4. **Etsy SEO Optimization**
+   - A/B test titles on first 50 products (after 7 days of data)
+   - Optimize underperforming listings
+   - Add more long-tail keyword variations
+
+5. **Performance Dashboard**
+   - Track: views, favorites, conversions, revenue per product
+   - Flag products with 50+ views and 0 sales for listing QA
+   - Flag products with sales for ad scaling in Phase 3
+
+---
+
+### Phase 3 — 600 Products + Paid Traffic Layer (Month 2+)
+
+**Goal:** 600 products live, $1,000/day revenue target hit.
+
+1. **Complete 600 Products**
+   - Final 300 products across remaining niches
+   - Add seasonal/trending content (Mother's Day, Christmas, back-to-school)
+   - Refresh best performers with new design variants
+
+2. **Paid Traffic on Proven Winners**
+   - Run Etsy Ads on top 20 performing products ($5–$10/day each)
+   - Run Meta ads on top 5 products from ShineOn
+   - ROAS target: 3x minimum before scaling
+
+3. **TikTok Organic Content Engine**
+   - 1 TikTok/day featuring a product (unboxing, gifting, lifestyle)
+   - Hook: "POV you found the perfect gift for [person]"
+   - Link in bio to Etsy store
+
+4. **Amazon Merch on Demand (Expansion)**
+   - Apply for Amazon Merch account
+   - Upload top 50 designs to Amazon Merch
+   - Zero additional traffic cost — Amazon's built-in audience
+
+5. **AI Pipeline V2**
+   - Fine-tune image generation prompts based on best-selling design styles
+   - Add trend monitoring (Google Trends → auto-generate seasonal content)
+   - Fully automated weekly batch: 20 new products/week ongoing
+
+---
+
+## Technical Specifications
+
+### Image Generation Requirements
+- Format: PNG
+- Resolution: 300 DPI minimum
+- T-shirt: 4500 × 5400 px (DTG) or 15 × 18 inches
+- Mug: 3300 × 2550 px (wrap-around) or 2400 × 1000 px (front only)
+- Jewelry (ShineOn): Per ShineOn template specifications
+- Color mode: RGB for digital QA, CMYK check for print accuracy
+
+### Printify API Integration
+- Endpoint: `https://api.printify.com/v1/`
+- Required: API key (from Printify account settings)
+- Create product: `POST /shops/{shop_id}/products.json`
+- Publish: `POST /shops/{shop_id}/products/{product_id}/publishing_succeeded.json`
+
+### ShineOn API Integration
+- Use ShineOn's official API or Zapier integration
+- Products require template selection + artwork upload
+- Fulfillment auto-triggered on order
+
+---
+
+## Success Metrics
+
+| Metric | Phase 1 Target | Phase 2 Target | Phase 3 Target |
+|---|---|---|---|
+| Products Live | 50 | 300 | 600 |
+| Daily Revenue | First sale | $150–$300/day | $1,000/day |
+| Products per day pipeline | 10 | 25 | 20 (maintenance) |
+| Etsy Store Views/day | 100 | 500+ | 2,000+ |
+| Conversion Rate | — | 1–2% | 2–4% |
+| Top Product Daily Revenue | — | $5+/day | $15+/day |
+| Pipeline Automation % | 60% | 85% | 95% |
+
+---
+
+## AI Execution Notes
+
+### PopeBot Can Execute Autonomously
+- Generate entire niche keyword research lists (per niche)
+- Write image generation prompts for all 600 designs (batch by niche)
+- Write all 600 product titles, descriptions, and tags
+- Build n8n/Make.com workflow documentation
+- Generate Pinterest pin descriptions from listing copy
+- Draft Printify API call scripts (Python or Node.js)
+- Monitor and flag underperforming products from performance data
+- Generate seasonal product ideas based on calendar
+
+### Requires Human Action
+- Create Printify and ShineOn API keys (account access)
+- Approve image generation API subscription and costs
+- QA review of AI-generated designs (copyright/print safety check)
+- Configure n8n/Make.com workflows (technical setup)
+- Approve and connect Etsy store
+- Final approval before each bulk publish batch
+- Budget decisions for paid ads
+
+### Cost Estimates (Pipeline Running Costs)
+- Image generation API: ~$0.02–$0.05 per image × 600 = ~$15–$30 total
+- n8n/Make.com: $20–$50/month
+- Printify: Free to list, pay per order
+- Etsy listing fee: $0.20 per listing × 600 = $120 one-time
+- **Total pipeline build cost: ~$200–$300**

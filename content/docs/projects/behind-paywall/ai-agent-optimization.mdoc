@@ -1,0 +1,186 @@
+---
+title: "AI Agent Optimization — Behind Paywall"
+description: "AI workflow map for Behind Paywall"
+status: "active"
+category: "Project Pipeline"
+tags:
+  - "ai"
+  - "automation"
+  - "behind-paywall"
+source: "project-pipeline"
+importedAt: "2026-04-13T00:00:00Z"
+---
+
+{
+  "root": {
+    "type": "root",
+    "children": [
+      {
+        "type": "heading",
+        "level": 1,
+        "children": [
+          {
+            "type": "text",
+            "text": "AI Agent Optimization \u2014 Behind Paywall"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Core AI Workflows"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Paywall Audit: Creator submits 10 past articles \u2192 Claude analyzes and categorizes: 'free forever,' 'upgrade teaser,' 'premium only' \u2014 outputs a recommended paywall structure"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Email Sequence Generator: Input creator's niche, audience size, and offer \u2192 Claude writes 7-email upgrade sequence in creator's voice"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Churn Risk Detection: Weekly scan of subscriber engagement data \u2192 Claude flags inactive subscribers \u2192 triggers automated re-engagement sequence"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Content Upgrade Identifier: Claude reads a free post and suggests what 'premium continuation' or 'deeper dive' could be the paid unlock"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Subject Line A/B Testing: Claude generates 5 subject line variants per email based on audience data"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "LLM Selection"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Content analysis and email writing: Claude claude-sonnet-4-6"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Subject line generation and quick edits: Claude Haiku (cost efficiency at scale)"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Churn prediction scoring: Deterministic rules + Claude Haiku for narrative summary"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Voice matching for email sequences: Claude claude-sonnet-4-6 with voice profile prompt"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

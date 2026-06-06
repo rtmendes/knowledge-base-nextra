@@ -1,0 +1,200 @@
+---
+title: "AI Agent Optimization — VidRevamp"
+description: "AI workflow map for VidRevamp"
+status: "active"
+category: "Project Pipeline"
+tags:
+  - "ai"
+  - "automation"
+  - "vidrevamp"
+source: "project-pipeline"
+importedAt: "2026-04-13T00:00:00Z"
+---
+
+{
+  "root": {
+    "type": "root",
+    "children": [
+      {
+        "type": "heading",
+        "level": 1,
+        "children": [
+          {
+            "type": "text",
+            "text": "AI Agent Optimization \u2014 VidRevamp"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "Core AI Pipeline"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Step 1 \u2014 Transcription: Whisper API transcribes video with speaker timestamps"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Step 2 \u2014 Clip Selection: Claude analyzes transcript for high-engagement moments (hooks, stories, insights, CTAs)"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Step 3 \u2014 Hook Scoring: Each candidate clip scored 1\u201310 on hook strength using proprietary rubric"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Step 4 \u2014 Caption Generation: Captions formatted with speaker identification and emphasis markers"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Step 5 \u2014 Metadata Generation: AI writes title, description, and hashtags for each clip per platform"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "children": [
+          {
+            "type": "text",
+            "text": "LLM Selection"
+          }
+        ]
+      },
+      {
+        "type": "unordered-list",
+        "children": [
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Transcription: OpenAI Whisper (best accuracy-cost ratio)"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Clip selection & scoring: Claude claude-sonnet-4-6 (long context for full transcript analysis)"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Caption styling: Deterministic formatting layer \u2014 no LLM needed"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Metadata generation: GPT-4o or Claude Haiku \u2014 fast, cheap at scale"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list-item",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Hook rewriting: Claude claude-sonnet-4-6 \u2014 nuanced copywriting for opening lines"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

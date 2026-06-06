@@ -1,0 +1,84 @@
+# Dispatch Routing Map — Canonical Config
+# Source of truth for: Notion "Dispatch Routing Map" page
+# Repo: rtmendes/knowledge-base-nextra
+# Last updated: 2026-04-14
+# Updated by: Cowork audit — Vercel MCP + DNS + HTTP checks
+
+routes:
+
+  ai_research:
+    intent: [research, summarize, explain, "what is", "find info on"]
+    destination: PopeBot (Groq/Railway)
+    endpoint: "https://thepopebot-production-e881.up.railway.app/api/chat"
+    status: confirmed
+
+  publication_writing:
+    intent: ["write an article", "draft a post", pitch, blog]
+    destination: Elite Writer
+    endpoint: TBD  # Vercel project exists but NEVER DEPLOYED. Coolify subdomain (elite-writer-app.insightprofit.live) returns 503. Fix tracked in ClickUp task 86e0wzwye.
+    status: blocked
+
+  ai_platform:
+    intent: [polsia, "AI API", "model endpoint"]
+    destination: Polsia (Railway)
+    endpoint: "https://polsia-production.up.railway.app"
+    status: confirmed
+
+  task_management:
+    intent: ["add task", "create task", "update priority", blocked]
+    destination: ClickUp MCP
+    endpoint: "mcp://clickup"
+    status: active
+
+  knowledge_base:
+    intent: ["add to KB", "knowledge base", ingest, "save to knowledge"]
+    destination: Nextra + Neon
+    endpoint: "https://kb.insightprofit.live"  # confirmed custom domain via Vercel MCP 2026-04-14
+    fallback: "https://knowledge-base-nextra.vercel.app"
+    status: confirmed
+
+  code_deploy:
+    intent: ["push to github", deploy, "fix the build", "update code"]
+    destination: GitHub + Vercel MCPs
+    endpoint: "mcp://github + mcp://vercel"
+    status: active
+
+  command_center:
+    intent: [dashboard, "mission control", "project status"]
+    destination: Command Center
+    endpoint: "https://center.insightprofit.live"  # FIXED 2026-04-14: was command.insightprofit.live (wrong — Oracle server, SSL broken). Correct domain confirmed via Vercel MCP.
+    fallback: "https://command-center-rouge-pi.vercel.app"
+    status: confirmed
+
+  marketing_funnels:
+    intent: [funnel, checkout, GHL, "order form"]
+    destination: Go High Level
+    endpoint: "mcp://ghl"
+    status: active
+
+  ecommerce:
+    intent: [shopify, "family gift studio", FGS, POD]
+    destination: Family Gift Studio (Shopify)
+    storefront: "https://familygiftstudio.com"
+    admin: "https://familydesignstudio.myshopify.com/admin"
+    api_token_ref: "SHOPIFY_FGS_TOKEN (shpat_cbaf3d37... — see Notion KEYS)"
+    vercel_engine: "https://family-gift-studio-engine-rashida-mendes-projects.vercel.app"  # build error — fix tracked in ClickUp 86e0wzx3x
+    status: partial  # Shopify confirmed; Vercel engine in ERROR state
+
+  video_content:
+    intent: [video, vidrevamp, youtube, "viral hook"]
+    destination: VidRevamp
+    endpoint: "https://vidrevamp.vercel.app"  # Vercel deployment READY but runtime HTTP 500 — fix tracked in ClickUp 86e0wzwr6
+    status: error
+
+  aviation:
+    intent: [aviation, pilot, FAA, cargo, flight, propel]
+    destination: Notion KB (aviation)
+    endpoint: "mcp://notion"
+    status: active
+
+  daily_briefing:
+    intent: ["morning briefing", "what's happening", "daily brief"]
+    destination: Chief of Staff (GitHub Actions)
+    endpoint: "GitHub Actions dispatch on knowledge-base-nextra"
+    status: active

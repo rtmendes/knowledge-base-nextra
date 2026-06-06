@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "github": {
+    "silent": false
+  },
+  "crons": [
+    {
+      "path": "/api/auto-deploy",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

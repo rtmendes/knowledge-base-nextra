@@ -1,0 +1,575 @@
+---
+title: "Konstant Kreative Clone — SOP + PRD"
+slug: "konstant-kreative-clone-sop-prd"
+status: active
+---
+
+## Two Features for Cursor/Codex Build
+
+**Source inspiration:** https://konstantkreative.com/ads-without-thinking-start-now-299-today
+**Date:** 2026-05-18
+**Author:** Viktor (PM/Orchestrator)
+**Executing agents:** Cursor Background Agents (Claude Opus)
+
+---
+
+# FEATURE 1: Creative Review Hub (Ad Campaign Engine)
+**Repo:** rtmendes/ad-campaign-engine
+**Branch:** feature/creative-review-hub
+**Target page route:** /review
+
+## 1.1 Problem Statement
+Our AI creative pipeline (GPT Image 2, Runway, fal.ai, Remotion, Kong-Killer Copy) generates unlimited ad creatives — but there is NO human quality gate before ads go live. Konstant Kreative's competitive advantage is "real editors + AI" — human editors polish every AI output. We need to clone this workflow as an internal review system.
+
+## 1.2 What We're Building
+A **Creative Review Hub** page in the Ad Campaign Engine where:
+1. AI-generated creatives land in a review queue automatically
+2. A reviewer (Rashida or VA) can approve, reject, or request revision
+3. Approved creatives get a quality score and move to "ready" status
+4. Rejected creatives get feedback that loops back to AI regeneration
+5. Batch review mode for high-volume runs (30+ creatives at once)
+6. Before/After comparison view showing original AI output → polished version
+
+## 1.3 New Convex Tables
+
+### Table: `creativeReviews`
+```typescript
+creativeReviews: defineTable({
+  // Link to existing creatives table
+  creativeId: v.id("creatives"),
+  
+  // Review state
+  status: v.union(
+    v.literal("pending"),       // Just entered queue
+    v.literal("in_review"),     // Reviewer is looking at it
+    v.literal("approved"),      // Passed QA
+    v.literal("rejected"),      // Failed QA — needs rework
+    v.literal("revision_requested"), // Minor tweaks needed
+    v.literal("auto_approved")  // Score >= 90, bypassed human review
+  ),
+  
+  // Quality scoring (0-100)
+  qualityScore: v.optional(v.number()),
+  
+  // Scoring breakdown
+  compositionScore: v.optional(v.number()),     // Layout, visual hierarchy (0-25)
+  brandAlignmentScore: v.optional(v.number()),  // On-brand colors, voice, style (0-25)
+  copyScore: v.optional(v.number()),            // Headline, CTA, body copy quality (0-25)
+  platformFitScore: v.optional(v.number()),     // Correct specs, format, safe zones (0-25)
+  
+  // Review metadata
+  reviewerNotes: v.optional(v.string()),
+  rejectionReason: v.optional(v.string()),
+  revisionInstructions: v.optional(v.string()),
+  
+  // AI-assisted pre-score (auto-calculated before human review)
+  aiPreScore: v.optional(v.number()),
+  aiPreScoreBreakdown: v.optional(v.string()), // JSON string of AI analysis
+  
+  // Timing
+  submittedAt: v.number(),
+  reviewStartedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+  
+  // Batch tracking
+  batchId: v.optional(v.string()),
+  batchName: v.optional(v.string()),
+  
+  // Version tracking (for revision loops)
+  version: v.number(), // starts at 1, increments on revision
+  previousReviewId: v.optional(v.id("creativeReviews")),
+})
+  .index("by_status", ["status"])
+  .index("by_creative", ["creativeId"])
+  .index("by_batch", ["batchId"])
+  .index("by_submitted", ["submittedAt"])
+  .index("by_score", ["qualityScore"]),
+
+// Review activity log
+reviewActivity: defineTable({
+  reviewId: v.id("creativeReviews"),
+  action: v.union(
+    v.literal("submitted"),
+    v.literal("review_started"),
+    v.literal("approved"),
+    v.literal("rejected"),
+    v.literal("revision_requested"),
+    v.literal("revision_submitted"),
+    v.literal("auto_approved"),
+    v.literal("score_updated"),
+    v.literal("note_added")
+  ),
+  details: v.optional(v.string()),
+  timestamp: v.number(),
+})
+  .index("by_review", ["reviewId"])
+  .index("by_timestamp", ["timestamp"]),
+
+// Review settings / configuration
+reviewSettings: defineTable({
+  // Auto-approve threshold (creatives scoring above this skip human review)
+  autoApproveThreshold: v.number(), // default: 90
+  
+  // Required minimum score to approve
+  minimumApproveScore: v.number(), // default: 60
+  
+  // Scoring weights (must sum to 100)
+  compositionWeight: v.number(),     // default: 25
+  brandAlignmentWeight: v.number(),  // default: 25
+  copyWeight: v.number(),            // default: 25
+  platformFitWeight: v.number(),     // default: 25
+  
+  // Batch settings
+  defaultBatchSize: v.number(), // default: 30 (Konstant's "30 ads" model)
+  
+  // Notification settings
+  notifyOnNewBatch: v.boolean(),
+  notifyOnAutoApprove: v.boolean(),
+  
+  // Active brand
+  brandId: v.optional(v.string()),
+})
+```
+
+## 1.4 New Backend Modules
+
+### `convex/creativeReviews.ts`
+```
+Functions needed:
+- submitForReview(creativeId, batchId?, batchName?) → creates review record
+- submitBatchForReview(creativeIds[], batchName) → bulk submit
+- startReview(reviewId) → marks as in_review
+- approveCreative(reviewId, scores, notes?) → marks approved, updates creative status to "ready"
+- rejectCreative(reviewId, reason, instructions?) → marks rejected
+- requestRevision(reviewId, instructions) → marks revision_requested
+- resubmitRevision(reviewId, updatedCreativeId) → creates new version
+- autoScoreCreative(reviewId) → AI pre-scoring via internal action
+- getReviewQueue(status?, batchId?) → paginated list
+- getReviewStats() → dashboard metrics (pending, approved, rejected, avg score, avg review time)
+- getBatchProgress(batchId) → batch-level metrics
+- updateSettings(settings) → update review thresholds
+- getSettings() → current settings
+```
+
+### `convex/creativeReviewActions.ts` (internal action for AI pre-scoring)
+```
+- aiPreScore(creativeId) → analyzes creative using AI:
+  - Composition: checks visual balance, hierarchy, whitespace
+  - Brand alignment: compares against stored brand guidelines
+  - Copy quality: headline power, CTA clarity, character counts
+  - Platform fit: aspect ratio, text overlay %, safe zones
+  Returns: { score: number, breakdown: object, suggestions: string[] }
+```
+
+## 1.5 Frontend — Review Hub Page (`/review`)
+
+### Page Layout (inspired by Konstant Kreative's clean, minimal aesthetic)
+
+**Design tokens to match Konstant's style:**
+```css
+/* Font: Satoshi (or Inter as fallback — already in project) */
+/* H1: 60px / 700 weight / #333333 / line-height: 70px */
+/* Body: 16px / 400 weight / #666666 */
+/* Background: #FFFFFF with subtle gradient accents */
+/* Primary CTA: #4A7CFF (Konstant's blue) → map to project's primary */
+/* Cards: white, subtle shadow, rounded-xl */
+/* Accent backgrounds: #F0EEFF (Konstant's light purple) → soft gradient panels */
+```
+
+### Section 1: Review Dashboard Header
+```
+┌──────────────────────────────────────────────────────┐
+│  Creative Review Hub                                  │
+│  "Real editors + AI. Every ad reviewed before launch." │
+│                                                        │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐         │
+│  │ 12     │ │ 45     │ │ 8      │ │ 87%    │         │
+│  │Pending │ │Approved│ │Rejected│ │Avg Score│         │
+│  └────────┘ └────────┘ └────────┘ └────────┘         │
+│                                                        │
+│  [Review Next]  [Batch Review]  [Settings ⚙️]         │
+└──────────────────────────────────────────────────────┘
+```
+
+### Section 2: Review Queue (Kanban-style columns)
+```
+┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│  PENDING     │ │  IN REVIEW   │ │  APPROVED    │ │  REJECTED    │
+│  (12)        │ │  (1)         │ │  (45)        │ │  (8)         │
+│ ┌───────────┐│ │ ┌───────────┐│ │ ┌───────────┐│ │ ┌───────────┐│
+│ │ [img]     ││ │ │ [img]     ││ │ │ [img]     ││ │ │ [img]     ││
+│ │ Score: 72 ││ │ │ Score: 85 ││ │ │ Score: 92 ││ │ │ Score: 38 ││
+│ │ Meta Feed ││ │ │ IG Story  ││ │ │ Meta Feed ││ │ │ TikTok    ││
+│ │ [Review →]││ │ │ [Continue]││ │ │ ✅ Done   ││ │ │ [Rework →]││
+│ └───────────┘│ │ └───────────┘│ │ └───────────┘│ │ └───────────┘│
+│ ┌───────────┐│ │              │ │ ┌───────────┐│ │ ┌───────────┐│
+│ │ [img]     ││ │              │ │ │ [img]     ││ │ │ [img]     ││
+│ │ Score: 88 ││ │              │ │ │ Score: 95 ││ │ │ Score: 42 ││
+│ │ Google    ││ │              │ │ │ IG Reel   ││ │ │ Reason:   ││
+│ │ [Review →]││ │              │ │ │ ✅ Done   ││ │ │ Off-brand ││
+│ └───────────┘│ │              │ │ └───────────┘│ │ └───────────┘│
+└─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
+```
+
+### Section 3: Single Creative Review Modal/Panel
+When user clicks "Review →", a full-width panel opens:
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Review Creative #CR-0047                    Batch: "FGS May Q2" │
+│  ┌────────────────────┐  ┌──────────────────────────────────────┐│
+│  │                    │  │ AI Pre-Score: 78/100                  ││
+│  │   [CREATIVE        │  │ ┌──────────────────────────────────┐ ││
+│  │    PREVIEW         │  │ │ Composition:     ████████░░ 80   │ ││
+│  │    LARGE]          │  │ │ Brand Alignment: ███████░░░ 72   │ ││
+│  │                    │  │ │ Copy Quality:    ████████░░ 82   │ ││
+│  │                    │  │ │ Platform Fit:    ███████░░░ 76   │ ││
+│  │                    │  │ └──────────────────────────────────┘ ││
+│  └────────────────────┘  │                                      ││
+│                          │ AI Suggestions:                       ││
+│  Type: Image Ad          │ • Headline could be 15% shorter      ││
+│  Platform: Meta Feed     │ • Text overlay at 22% (ideal < 20%)  ││
+│  Dimensions: 1080x1080   │ • CTA button contrast is strong ✓    ││
+│  Created: 2 hours ago    │                                      ││
+│                          │ Your Score:                           ││
+│  Headline:               │ ┌──────────────────────────────────┐ ││
+│  "Transform Your Gift    │ │ Composition:     [slider 0-25]   │ ││
+│   Giving Forever"        │ │ Brand Alignment: [slider 0-25]   │ ││
+│                          │ │ Copy Quality:    [slider 0-25]   │ ││
+│  Primary Text:           │ │ Platform Fit:    [slider 0-25]   │ ││
+│  "Discover personalized  │ └──────────────────────────────────┘ ││
+│   gifts that..."         │ Total: 82/100                        ││
+│                          │                                      ││
+│  CTA: Shop Now           │ Notes: [________________]            ││
+│                          │                                      ││
+│  ┌──────┐ ┌──────────┐  │ [✅ Approve] [❌ Reject] [🔄 Revise]││
+│  │ Prev │ │ Next (11) │  │                                      ││
+│  └──────┘ └──────────┘  └──────────────────────────────────────┘│
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Section 4: Batch Review Mode
+Inspired by Konstant's "30 Ads" model — review entire batches at once:
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Batch Review: "FGS May Q2"                   30 creatives       │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐               │
+│  │ [thumbnail] │ │ [thumbnail] │ │ [thumbnail] │ ...            │
+│  │ Score: 92   │ │ Score: 78   │ │ Score: 65   │               │
+│  │ ☑ Approve   │ │ ☑ Approve   │ │ ☐ Review    │               │
+│  └─────────────┘ └─────────────┘ └─────────────┘               │
+│                                                                  │
+│  Selected: 24/30 approved  |  4 need review  |  2 rejected      │
+│                                                                  │
+│  [Approve All Selected]  [Reject Selected]  [Export Approved]    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Section 5: Before/After Transformation View
+Clone of Konstant's product → ad transformation carousel:
+```
+┌──────────────────────────────────────────────────────┐
+│  Before → After                                       │
+│  ┌───────────────┐     ┌───────────────┐             │
+│  │ [Original     │  →  │ [Polished     │             │
+│  │  AI Output]   │     │  Final Ad]    │             │
+│  │               │     │               │             │
+│  │ Score: 58     │     │ Score: 91     │             │
+│  └───────────────┘     └───────────────┘             │
+│  Improvements: +33 points                             │
+│  • Rebalanced composition                             │
+│  • Fixed text overlay ratio                           │
+│  • Strengthened CTA contrast                          │
+└──────────────────────────────────────────────────────┘
+```
+
+## 1.6 Integration with Existing Tables
+
+The `creatives` table already has a `status` field with values: draft, ready, active, fatigued, archived. The review system plugs in between:
+- When a creative is generated → status stays "draft" → auto-submitted to review queue
+- When approved → status changes to "ready" (available for campaigns)
+- When rejected → status stays "draft" with feedback attached
+
+**Modify existing `creatives` table:** Add optional field:
+```typescript
+reviewStatus: v.optional(v.union(
+  v.literal("pending_review"),
+  v.literal("in_review"),
+  v.literal("approved"),
+  v.literal("rejected"),
+  v.literal("revision_requested")
+)),
+lastReviewId: v.optional(v.id("creativeReviews")),
+```
+
+## 1.7 Sidebar Navigation
+Add to AppSidebar.tsx after existing items:
+```
+📋 Review Hub (/review)  — with badge showing pending count
+```
+
+---
+
+# FEATURE 2: Konstant-Style Landing Page Templates (Offer Engine)
+**Repo:** rtmendes/offer-engine  
+**Branch:** feature/konstant-landing-templates
+**Target:** New template type in Templates page + new section templates
+
+## 2.1 Problem Statement
+Konstant Kreative's sales page is a conversion masterclass: anchor pricing, cost comparison tables, before/after product transformations, social proof bars, urgency CTAs. Our Offer Engine has a template system and funnel builder — but lacks these specific high-converting DTC landing page patterns. We need to add them as reusable section templates and full-page templates.
+
+## 2.2 What We're Building
+5 new **Section Templates** and 2 new **Full Page Templates** in the Offer Engine that clone Konstant Kreative's proven conversion patterns. These get added to the existing `sectionTemplates` and `templates` tables.
+
+## 2.3 New Section Templates (add to existing `sectionTemplates` table)
+
+### Template S1: "Anchor Pricing Comparison" (Konstant's Before/After cost section)
+```
+Design spec:
+- Two-column layout: "Before" (left) vs "After [Brand]" (right)
+- Before column: stacked tool logos + names + monthly costs, muted/gray styling
+- Red "Total Monthly Cost: $X" at bottom of Before column
+- After column: feature checklist with checkmarks, vibrant brand-colored background
+- Large price callout: "$299 Today" with strikethrough original price
+- "Save $X/month on tools" green savings badge
+- Bottom CTA button (full-width, Konstant blue #4A7CFF or brand primary)
+
+Content fields:
+- beforeItems: array of { toolName, description, monthlyCost, logoUrl? }
+- afterBrandName: string
+- afterFeatures: array of strings (checkmark list)
+- price: number
+- priceLabel: string (e.g., "Today")
+- savingsAmount: number
+- ctaText: string
+- ctaUrl: string
+- discountText: string (e.g., "Get 50% Off First Month")
+
+Styling:
+- Background: white
+- Before column: light gray (#F5F5F5) background, muted text
+- After column: white with brand accent border
+- Price: 48px bold, brand primary color
+- Savings badge: green (#22C55E) background, white text
+- CTA: full-width, brand primary, rounded-xl, 18px font, 16px/24px padding
+- Font: system font stack matching project (Inter)
+```
+
+### Template S2: "Hero with Video Carousel" (Konstant's top section)
+```
+Design spec:
+- Centered layout, max-width 800px
+- Large H1: 3-line impact headline (60px/700 weight)
+- Subtitle paragraph (18px, muted gray)
+- Primary CTA button (centered, large)
+- Discount text below CTA (small, muted)
+- Below: horizontal scrolling carousel of 4 video/image thumbnails
+- Carousel items: rounded corners, subtle shadow, 3:4 aspect ratio
+- Trust badge bar: "Trusted by X+ [audience]" with star rating
+
+Content fields:
+- headline: string (supports line breaks)
+- subtitle: string
+- ctaText: string
+- ctaUrl: string
+- discountText: string
+- carouselItems: array of { imageUrl, videoUrl?, label? }
+- trustText: string (e.g., "Trusted by 2,000+ Marketing Teams")
+- trustStars: number (1-5)
+
+Styling:
+- Background: white with subtle gradient overlay (Konstant's light purple wash)
+- Gradient: linear-gradient(180deg, rgba(240,238,255,0.3) 0%, white 50%)
+- H1: #333333, 48-60px based on viewport, bold
+- Subtitle: #666666, 18px, max-width 600px
+- CTA: #4A7CFF → brand primary, white text, rounded-full, shadow-lg
+- Carousel: overflow-x auto, scroll-snap, gap-6, px-8
+- Trust bar: centered, gray text, gold stars ★
+```
+
+### Template S3: "Feature Grid with Icons" (Konstant's 3-feature section)
+```
+Design spec:
+- Section title + subtitle (centered)
+- 3-column grid of feature cards
+- Each card: icon/emoji at top, bold title, description paragraph
+- Subtle background (Konstant's light purple #F0EEFF)
+- Bottom CTA
+
+Content fields:
+- sectionTitle: string
+- sectionSubtitle: string
+- features: array of { icon, title, description } (exactly 3)
+- ctaText: string
+- ctaUrl: string
+- discountText: string
+
+Styling:
+- Background: #F0EEFF (soft purple) or brand light accent
+- Cards: white, rounded-xl, p-8, shadow-sm
+- Icon: 40px, brand primary color
+- Title: 20px, #333, bold
+- Description: 16px, #666
+- CTA: same as hero CTA pattern
+```
+
+### Template S4: "Product Transformation Showcase" (Konstant's Before→After carousel)
+```
+Design spec:
+- Section title: "Turn Any [X] Into [Y]" (bold, centered)
+- Subtitle: "Created with AI. Refined by real editors."
+- Horizontal carousel of transformation cards
+- Each card: white background, product image on top → arrow → finished ad on bottom
+- Cards have subtle shadow, rounded-xl
+- Navigation arrows at bottom (< >)
+
+Content fields:
+- sectionTitle: string
+- sectionSubtitle: string
+- transformations: array of { beforeImageUrl, afterImageUrl, label? }
+
+Styling:
+- Background: Konstant light purple #F0EEFF wash
+- Cards: white, rounded-2xl, p-6, shadow-md, max-width 280px
+- Before image: centered, max-height 200px, rounded
+- Arrow: ↓ icon, 24px, gray
+- After image: centered, max-height 200px, rounded
+- Carousel: horizontal scroll, scroll-snap, gap-8
+- Nav arrows: circular buttons, border, 40px
+```
+
+### Template S5: "Dark CTA Footer" (Konstant's bottom conversion section)
+```
+Design spec:
+- Full-width dark background (Konstant uses deep navy/black with gradient)
+- Large centered headline (white, 48-56px)
+- Subtitle with social proof (star rating + trust text)
+- Primary CTA button (brand blue on dark)
+- Discount text below
+
+Content fields:
+- headline: string
+- subtitle: string
+- trustText: string
+- trustStars: number
+- ctaText: string
+- ctaUrl: string
+- discountText: string
+
+Styling:
+- Background: linear-gradient(180deg, #0A0A1A 0%, #1A1A2E 100%)
+- Headline: white, 48-56px, bold
+- Subtitle: rgba(255,255,255,0.7), 18px
+- Stars: gold #F59E0B
+- CTA: #4A7CFF, white text, rounded-full, shadow-xl, glow effect
+- Discount: rgba(255,255,255,0.5), 14px
+```
+
+## 2.4 New Full Page Templates (add to existing `templates` table)
+
+### Template P1: "Konstant DTC Sales Page"
+Combines sections in order: S2 (Hero) → S3 (Features) → S4 (Transformations) → S1 (Pricing Comparison) → S5 (Dark CTA Footer)
+
+### Template P2: "SaaS Replacement Page"  
+Combines: S2 (Hero, adapted for SaaS) → S1 (Pricing Comparison, tools replaced) → S3 (Features) → Testimonials (existing) → S5 (Dark CTA Footer)
+
+## 2.5 Backend Changes
+
+### Seed data in `convex/sectionTemplates.ts`
+Add a seed function or migration that inserts the 5 new section templates with:
+- `type`: "konstant_anchor_pricing" | "konstant_hero_carousel" | "konstant_feature_grid" | "konstant_transformation" | "konstant_dark_cta"
+- `category`: "conversion" 
+- `previewImageUrl`: generated preview of each template
+- `defaultContent`: JSON of all content fields with sample data
+- `cssClasses`: Tailwind classes for the template
+- Full responsive markup (mobile-first)
+
+### Seed data in `convex/templates.ts`  
+Add the 2 full page templates referencing the section templates.
+
+## 2.6 Frontend Components
+
+### New components in `src/components/sections/`:
+```
+KonstantAnchorPricing.tsx    — S1 renderer
+KonstantHeroCarousel.tsx     — S2 renderer  
+KonstantFeatureGrid.tsx      — S3 renderer
+KonstantTransformation.tsx   — S4 renderer
+KonstantDarkCTA.tsx          — S5 renderer
+```
+
+Each component:
+- Accepts content fields as props (typed interface)
+- Renders the exact design spec above using Tailwind CSS
+- Fully responsive (mobile → tablet → desktop breakpoints)
+- Editable in the funnel builder (clicking any text field opens inline editor)
+- Supports brand color override via CSS custom properties
+- Animations: subtle fade-in on scroll (Framer Motion or CSS)
+
+### Update `src/pages/TemplatesPage.tsx`:
+- Add "Konstant Collection" category filter
+- Show the 5 new section templates + 2 page templates with preview cards
+
+### Update `src/pages/FunnelBuilderPage.tsx`:
+- Register the 5 new section types in the section picker dropdown
+- Allow drag-drop of Konstant sections into any funnel step
+
+## 2.7 Design System Alignment
+All Konstant-inspired components must use the project's existing:
+- shadcn/ui components (Button, Card, etc.)
+- Tailwind config colors and spacing
+- But ADD these Konstant-specific tokens to tailwind.config:
+```javascript
+// In extend.colors:
+konstant: {
+  blue: '#4A7CFF',
+  purple: '#F0EEFF',
+  dark: '#0A0A1A',
+  darkAccent: '#1A1A2E',
+  gray: '#F5F5F5',
+  savings: '#22C55E',
+}
+```
+
+---
+
+# IMPLEMENTATION ORDER
+
+## Phase 1: Creative Review Hub (Ad Campaign Engine) — PRIORITY
+1. Add 3 new Convex tables (creativeReviews, reviewActivity, reviewSettings)
+2. Modify creatives table (add reviewStatus, lastReviewId)
+3. Build backend module (creativeReviews.ts — all 13 functions)
+4. Build AI pre-scoring action (creativeReviewActions.ts)
+5. Build ReviewHubPage.tsx with all 5 sections
+6. Build ReviewModal component (single creative review)
+7. Build BatchReview component 
+8. Build BeforeAfterView component
+9. Add sidebar nav item with pending badge
+10. Wire routing in App.tsx
+
+## Phase 2: Konstant Landing Templates (Offer Engine) — PRIORITY
+1. Create 5 section template components
+2. Create seed data for sectionTemplates table
+3. Create 2 full page template seeds
+4. Register components in funnel builder section picker
+5. Add "Konstant Collection" filter to TemplatesPage
+6. Add konstant color tokens to Tailwind config
+7. Test all 5 sections in responsive views
+8. Test full page template assembly in funnel builder
+
+## TESTING CHECKLIST
+- [ ] Review queue loads with pending creatives
+- [ ] Single review modal scores and saves correctly
+- [ ] Approve → creative status changes to "ready"
+- [ ] Reject → creative stays "draft" with feedback
+- [ ] Batch review approves/rejects multiple
+- [ ] Auto-approve triggers for score >= 90
+- [ ] Before/After view renders correctly
+- [ ] All 5 section templates render on desktop + mobile
+- [ ] Anchor pricing calculates savings correctly
+- [ ] Hero carousel scrolls/snaps properly
+- [ ] Transformation carousel navigates
+- [ ] Dark CTA gradient renders correctly
+- [ ] Templates appear in TemplatesPage
+- [ ] Sections available in FunnelBuilderPage
+- [ ] Brand color override works
+- [ ] No console errors, no infinite re-renders

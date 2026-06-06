@@ -1,0 +1,17 @@
+---
+title: "1. Product Overview & Core Objectives"
+description: "Claude Code session — YouTube Playlist Analytics"
+status: "active"
+category: "claude-chats"
+tags:
+  - "claude"
+  - "cowork"
+  - "youtube-playlist-analytics"
+source: claude
+sourceUrl: "claude://projects/YouTube%20Playlist%20Analytics/79918755-19ea-4f6f-a2ef-93ac7f9c5857"
+importedAt: "2026-04-13T23:39:25.325Z"
+sessionDate: "2026-03-26"
+messageCount: 42
+---
+
+[{"type":"heading","level":2,"children":[{"text":"Session Summary"}]},{"type":"paragraph","children":[{"text":"Project: YouTube Playlist Analytics | Date: 2026-03-26 | Messages: 42"}]},{"type":"heading","level":2,"children":[{"text":"Conversation Excerpt"}]},{"type":"heading","level":3,"children":[{"text":"🧑 You"}]},{"type":"paragraph","children":[{"text":"1. Product Overview & Core Objectives\nVidRevamp is a premier ad intelligence and AI-powered content creation platform. It aggregates top-performing video ad creatives across Instagram, TikTok, YouTube, and Facebook.\n* Target Audience: Top-tier CMOs, CRO specialists, Shopify brand owners, and performance marketers.\n* Core Loop: Search/Discover winning ads ➡️ Analyze metadata, scripts, and monetization ➡️ Save to Swipe File ➡️ Use AI to clone/model the script and hooks for the user's specific brand.\n2. Data Architecture & Input Sources\nTo avoid astronomical scraping costs while maintaining a top 1% data pipeline, VidRevamp will use a hybrid data ingestion model relying on specialized third-party APIs and scrapers.\nRecommended Data Sources\nPlatformSource / MechanismExpected CostData ProvidedF"}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"Let me explore the existing VidRevamp project structure first."}]},{"type":"heading","level":3,"children":[{"text":"🧑 You"}]},{"type":"paragraph","children":[{"text":"I've reviewed the four server action files you wanted me to read. Here's what I found:"}]},{"type":"paragraph","children":[{"text":"## automations.ts — Workflow Generation & Deployment"}]},{"type":"paragraph","children":[{"text":"This file orchestrates n8n automation workflows through Claude AI prompting. Key functions:"}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"Still here! Let me get a clear picture of what's already built before writing any code."}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"`★ Insight ─────────────────────────────────────`\nThe project already uses **Supabase + ScrapeCreators** — not Prisma + Apify as the spec describes. I'm adapting all 8 parts to the existing stack: Supabase for all DB ops, ScrapeCreators for ad scraping, and the existing `logUsageEvent` fire-and-forget pattern for cost tracking.\n`─────────────────────────────────────────────────`"}]},{"type":"heading","level":3,"children":[{"text":"🤖 Claude"}]},{"type":"paragraph","children":[{"text":"`★ Insight ─────────────────────────────────────`\nThe `ad_creatives` table uses `external_ad_id TEXT UNIQUE` as a natural deduplication key — this means any scrape job can safely `upsert` without checking for existence first. The `UNIQUE (user_id, name, platform)` on `competitors` prevents the same brand being tracked twice per platform per user.\n`─────────────────────────────────────────────────`"}]},{"type":"paragraph","children":[{"text":"... and 36 more messages in this session."}]}]

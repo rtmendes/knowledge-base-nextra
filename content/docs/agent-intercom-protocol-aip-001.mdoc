@@ -1,0 +1,2020 @@
+---
+title: "Agent Intercom Protocol (AIP) — SOP + PRD + Technical Specifications"
+slug: "agent-intercom-protocol-aip-001"
+status: active
+---
+
+## For Implementation via Claude Code by Coding Harness (Codex / Cursor)
+
+---
+
+**Document ID:** AIP-001 v1.0
+**Date:** 2026-05-31
+**Author:** Viktor AI (Architecture & Specification)
+**Builder:** Claude Code (via Codex or Cursor dispatch)
+**Stakeholder:** Rashida Mendes (@rmreal)
+**Status:** Ready for Build
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#1-executive-summary)
+2. [Product Requirements Document (PRD)](#2-product-requirements-document)
+3. [Standard Operating Procedure (SOP)](#3-standard-operating-procedure)
+4. [Technical Specifications](#4-technical-specifications)
+5. [Implementation Plan](#5-implementation-plan)
+6. [CLAUDE.md for Coding Harness](#6-claudemd-for-coding-harness)
+7. [Testing & Verification](#7-testing--verification)
+8. [Appendices](#8-appendices)
+
+---
+
+## 1. Executive Summary
+
+### What We're Building
+
+An **Agent Intercom Protocol (AIP)** — a real-time, blocking inter-agent communication system that enables AI agents working on ads-related tasks to discover each other, ask questions, share context, and collaborate on complex workflows without human relay.
+
+### Why
+
+Today, our 12+ AI agents working across Ad Campaign Engine, DTC Strategy Agent, UMDM, Meta/Google Ads analyzers, CRO Agent, and Creative Factory all operate in isolation. When the Creative Scoring agent discovers a fatigued ad, it can't tell the Campaign Ops agent to pause it. When the DTC Strategy agent detects a growth stage change, it can't tell the Budget Optimizer to reallocate. Every cross-agent coordination requires a human to relay the message.
+
+### Inspired By
+
+Pi-Intercom (github.com/rtmendes/pi-intercom) — a local IPC messaging system for coding agents that implements blocking ask/reply, session discovery, and supervisor escalation. We're adapting its best patterns for our cloud-distributed, multi-app, Supabase-backed architecture.
+
+### Target Apps (In Scope)
+
+| App | Repo | URL | Backend |
+|-----|------|-----|---------|
+| Ad Campaign Engine | rtmendes/ad-campaign-engine | adengine.insightprofit.live | Convex (16 tables, 42 modules) |
+| Offer Engine v3 | rtmendes/offer-stack-engine | offers.insightprofit.live | Convex (30+ tables) |
+| Revenue Intelligence Engine | (Viktor Space) | revenue.insightprofit.live | Convex (15 tables) |
+| Command Center v2 | rtmendes/insightprofit-command-v2 | command.insightprofit.live | Supabase + Next.js |
+| UMDM (Data Layer) | (scripts + Supabase) | N/A (Supabase tables) | Supabase (10 tables) |
+
+### Key Innovation Adopted from Pi-Intercom
+
+| Pi-Intercom Pattern | Our Implementation |
+|---------------------|-------------------|
+| Unix socket broker | Supabase Realtime channel + `agent_intercom_messages` table |
+| Blocking ask/reply (10-min timeout) | Supabase Realtime subscription with row-level notification + polling fallback |
+| Session registry + presence | `agent_intercom_sessions` table with heartbeat |
+| 3-tier supervisor escalation | Structured Slack escalation (BLOCKING → INTERVIEW → UPDATE) |
+| Length-prefixed JSON framing | Typed JSON payloads in Supabase with Zod validation |
+| Auto-spawn/auto-exit broker | Always-on Supabase (zero additional infrastructure) |
+
+---
+
+## 2. Product Requirements Document (PRD)
+
+### 2.1 Problem Statement
+
+**Current State:**
+- 12+ AI agent modules across 5 ads-related apps operate in complete isolation
+- No agent can discover what other agents are running or their current status
+- Cross-agent coordination requires human relay via Slack (hours of latency)
+- When Agent A discovers information Agent B needs, there is no delivery mechanism
+- Complex multi-step ad workflows (creative → scoring → launch → monitor → optimize) run as disconnected serial steps
+- No structured escalation — agents dump everything into Slack at equal priority
+
+**Desired State:**
+- Any agent can discover all other active agents and their current tasks
+- Agents can send fire-and-forget notifications to other agents
+- Agents can ask blocking questions to other agents and receive answers in real-time
+- Complex ad workflows self-orchestrate across agents without human relay
+- Structured 3-tier escalation (BLOCKING/INTERVIEW/UPDATE) to human supervisors
+- Full audit trail of all inter-agent communication in Supabase
+
+### 2.2 User Stories
+
+1. **As the Creative Scoring Agent**, when I detect a creative with fatigueScore > 80, I want to SEND a notification to Campaign Ops Agent so it can pause the associated ad set automatically.
+
+2. **As the DTC Strategy Agent**, when I detect a growth stage transition (e.g., Stage 1 → Stage 2), I want to ASK the Budget Optimizer Agent "What is the current daily spend and recommended new allocation?" and receive a structured answer before generating the new strategy.
+
+3. **As the Campaign Ops Agent**, when I'm about to launch a campaign but the creative hasn't been scored yet, I want to ASK the Creative Scoring Agent to score the creative and block until I receive the quality score.
+
+4. **As the UMDM ETL Agent**, when I detect a governance violation (naming convention breach), I want to SEND an alert to the Campaign Ops Agent with the violation details so it can auto-fix or flag.
+
+5. **As the Offer Engine Agent**, when building a new offer funnel, I want to ASK the Revenue Intelligence Agent "What is the current AOV and LTV for this product category?" and use the response to set pricing.
+
+6. **As any agent**, when I hit an ambiguity that requires human judgment, I want to ESCALATE with the appropriate tier (BLOCKING for immediate decisions, INTERVIEW for multi-question sessions, UPDATE for FYI progress reports).
+
+7. **As Rashida (human supervisor)**, I want to see a real-time dashboard of all active agent sessions, pending asks, and escalations so I can intervene when needed.
+
+### 2.3 Success Metrics
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Agent-to-agent message delivery time | < 2 seconds | Timestamp delta (sent → received) |
+| Blocking ask/reply round-trip | < 30 seconds (avg) | Timestamp delta (ask sent → reply received) |
+| Human relay elimination | > 80% of cross-agent coordination automated | Before/after comparison |
+| Escalation response time | < 5 min for BLOCKING tier | Slack timestamp delta |
+| Message delivery reliability | > 99.5% | Delivered / sent ratio |
+| Agent discovery accuracy | 100% of active agents visible | Session registry vs actual |
+| Audit trail completeness | 100% messages logged | Supabase row count validation |
+
+### 2.4 Non-Functional Requirements
+
+- **Latency:** Message delivery < 2s via Supabase Realtime; polling fallback < 5s
+- **Availability:** Inherits Supabase uptime (99.9%+)
+- **Scalability:** Support 50+ concurrent agent sessions
+- **Persistence:** All messages stored permanently in Supabase (queryable, auditable)
+- **Security:** RLS policies — agents can only read messages addressed to them
+- **Observability:** Every message logged with sender, receiver, type, timestamp, payload size
+- **Backward Compatibility:** Existing Convex-based apps unchanged — AIP is additive
+
+### 2.5 Out of Scope (Phase 2+)
+
+- Video/audio streaming between agents
+- Cross-workspace agent communication (different Supabase instances)
+- Agent-to-agent file transfer (use existing Supabase Storage)
+- Machine learning on communication patterns
+- Natural language agent-to-agent dialogue (structured messages only)
+
+---
+
+## 3. Standard Operating Procedure (SOP)
+
+### 3.1 Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    AGENT INTERCOM PROTOCOL (AIP) v1.0                   │
+│              Cloud-Native • Supabase-Backed • Real-Time                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────────┐  │
+│  │ SESSION REGISTRY │  │ MESSAGE ROUTER   │  │ ESCALATION ENGINE    │  │
+│  │                  │  │                  │  │                       │  │
+│  │ • Agent register │  │ • send (async)   │  │ • BLOCKING → Slack   │  │
+│  │ • Heartbeat (30s)│  │ • ask (blocking) │  │ • INTERVIEW → form   │  │
+│  │ • Presence status│  │ • reply (to ask) │  │ • UPDATE → log only  │  │
+│  │ • Auto-cleanup   │  │ • broadcast      │  │ • Auto-timeout (10m) │  │
+│  │ • Capability tags│  │ • Delivery ack   │  │                       │  │
+│  └────────┬─────────┘  └────────┬─────────┘  └───────────┬───────────┘  │
+│           │                     │                         │              │
+│           └─────────────────────┼─────────────────────────┘              │
+│                                 ▼                                        │
+│  ┌──────────────────────────────────────────────────────────────────────┐│
+│  │              SUPABASE (Self-Hosted • Already Running)                ││
+│  │                                                                      ││
+│  │  agent_intercom_sessions  │  agent_intercom_messages                ││
+│  │  agent_intercom_escalations │  agent_intercom_audit_log             ││
+│  │                                                                      ││
+│  │  Realtime: channel "agent-intercom" (broadcast + postgres_changes)  ││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                 │                                        │
+│                                 ▼                                        │
+│  ┌─────────────┐  ┌────────────────┐  ┌─────────────────────────────┐  │
+│  │ Ad Campaign  │  │ Offer Engine   │  │ Command Center v2           │  │
+│  │ Engine       │  │ v3             │  │ (Dashboard + Monitoring)    │  │
+│  │ (Convex)     │  │ (Convex)       │  │ (Next.js + Supabase)       │  │
+│  │              │  │                │  │                             │  │
+│  │ 12 AI agents │  │ 6 AI agents    │  │ Intercom Dashboard view    │  │
+│  │ → AIP client │  │ → AIP client   │  │ → live session/msg viewer  │  │
+│  └──────────────┘  └────────────────┘  └─────────────────────────────┘  │
+│                                                                         │
+│  ┌─────────────┐  ┌────────────────┐                                   │
+│  │ Revenue Intel│  │ UMDM ETL      │                                   │
+│  │ Engine       │  │ (Python/n8n)  │                                   │
+│  │ (Convex)     │  │ → AIP client  │                                   │
+│  │ → AIP client │  │               │                                   │
+│  └──────────────┘  └────────────────┘                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Agent Registration Flow
+
+```
+Agent starts up
+    │
+    ▼
+Register with AIP
+    │  INSERT into agent_intercom_sessions:
+    │  {agent_id, agent_name, app_source, capabilities[], status: "idle", heartbeat_at}
+    │
+    ▼
+Start heartbeat loop (every 30 seconds)
+    │  UPDATE agent_intercom_sessions SET heartbeat_at = NOW(), status = current_status
+    │
+    ▼
+Subscribe to Supabase Realtime
+    │  Channel: "agent-intercom"
+    │  Filter: postgres_changes on agent_intercom_messages WHERE receiver_id = my_agent_id
+    │
+    ▼
+Agent is now discoverable and can send/receive messages
+    │
+    ▼
+On shutdown: UPDATE status = "offline", unsubscribe from Realtime
+```
+
+### 3.3 Message Flow — SEND (Fire-and-Forget)
+
+```
+Agent A wants to notify Agent B:
+    │
+    ▼
+Agent A checks session registry:
+    │  SELECT * FROM agent_intercom_sessions WHERE agent_name = 'campaign-ops'
+    │
+    ├── Agent B not found → log warning, skip
+    │
+    ▼
+Agent A inserts message:
+    │  INSERT INTO agent_intercom_messages {
+    │    sender_id, receiver_id, type: "send",
+    │    payload: {text, data, attachments},
+    │    status: "sent", expects_reply: false
+    │  }
+    │
+    ▼
+Supabase Realtime triggers notification to Agent B
+    │
+    ▼
+Agent B receives message → processes inline → optionally acts
+    │
+    ▼
+Agent B updates message status:
+    │  UPDATE agent_intercom_messages SET status = "delivered", delivered_at = NOW()
+    │
+    ▼
+Done (Agent A never blocked)
+```
+
+### 3.4 Message Flow — ASK (Blocking)
+
+```
+Agent A needs an answer from Agent B:
+    │
+    ▼
+Agent A inserts ASK message:
+    │  INSERT INTO agent_intercom_messages {
+    │    sender_id, receiver_id, type: "ask",
+    │    payload: {question, context, required_fields},
+    │    status: "pending", expects_reply: true
+    │  }
+    │
+    ▼
+Agent A enters WAIT state:
+    │  Subscribe to postgres_changes on agent_intercom_messages
+    │  WHERE reply_to_message_id = this_message_id AND type = "reply"
+    │  Polling fallback: SELECT every 3 seconds
+    │  Timeout: 10 minutes (configurable per-agent)
+    │
+    ▼
+Supabase Realtime notifies Agent B of incoming ASK
+    │
+    ▼
+Agent B processes the question:
+    │  - Reads payload.question and payload.context
+    │  - Computes/looks up the answer
+    │  - Formats structured response
+    │
+    ▼
+Agent B inserts REPLY:
+    │  INSERT INTO agent_intercom_messages {
+    │    sender_id: B, receiver_id: A, type: "reply",
+    │    reply_to_message_id: original_ask_id,
+    │    payload: {answer, data},
+    │    status: "sent"
+    │  }
+    │
+    ▼
+Agent A's subscription fires → receives reply
+    │
+    ▼
+Agent A continues execution with the answer in context
+    │  (zero context loss — same execution context)
+    │
+    ▼
+Both messages updated: status = "completed"
+```
+
+### 3.5 Escalation Flow — Human-in-the-Loop
+
+```
+Agent hits ambiguity requiring human judgment:
+    │
+    ├── Tier 1: BLOCKING (needs immediate decision)
+    │   │  INSERT INTO agent_intercom_escalations {
+    │   │    agent_id, tier: "blocking", question, context,
+    │   │    timeout_minutes: 10, status: "pending"
+    │   │  }
+    │   │  → Slack message to #v-infra with ⚠️ priority
+    │   │  → Agent blocks until human replies or timeout
+    │   ▼
+    │   Human replies in Slack → webhook → INSERT reply → agent unblocks
+    │
+    ├── Tier 2: INTERVIEW (needs multiple structured answers)
+    │   │  INSERT INTO agent_intercom_escalations {
+    │   │    agent_id, tier: "interview",
+    │   │    questions: [{id, question, type, options}],
+    │   │    timeout_minutes: 30, status: "pending"
+    │   │  }
+    │   │  → Slack message with structured form
+    │   │  → Agent blocks until all answers received
+    │   ▼
+    │   Human answers all questions → agent unblocks with structured data
+    │
+    └── Tier 3: UPDATE (fire-and-forget progress)
+        │  INSERT INTO agent_intercom_escalations {
+        │    agent_id, tier: "update", message, data,
+        │    status: "sent"
+        │  }
+        │  → Slack message to thread (informational)
+        ▼
+        Agent continues immediately (no blocking)
+```
+
+### 3.6 Agent Capability Registry
+
+Each agent registers its capabilities so other agents can discover *what* to ask *whom*:
+
+| Agent Name | App Source | Capabilities | Can Answer |
+|------------|-----------|-------------|------------|
+| `creative-factory` | Ad Campaign Engine | `generate_creative`, `score_creative`, `batch_variants` | Creative quality scores, hook analysis, visual recommendations |
+| `creative-scorer` | Ad Campaign Engine | `score_creative`, `fatigue_detection` | Quality scores (0-100), fatigue alerts, launch/optimize/rework verdicts |
+| `campaign-ops` | Ad Campaign Engine | `launch_campaign`, `pause_campaign`, `adjust_budget` | Campaign status, budget data, performance metrics |
+| `budget-optimizer` | Ad Campaign Engine | `optimize_budget`, `reallocate` | Current spend, recommended allocation, scaling signals |
+| `audience-builder` | Ad Campaign Engine | `build_audience`, `rfm_segment` | Audience sizes, segment data, lookalike recommendations |
+| `dtc-strategist` | Ad Campaign Engine | `detect_stage`, `generate_strategy` | Growth stage, strategic recommendations, KPI targets |
+| `copy-engine` | Ad Campaign Engine | `generate_copy`, `headline_matrix` | Ad copy variants, headlines, hooks, frameworks |
+| `offer-architect` | Offer Engine v3 | `build_offer`, `price_offer`, `ab_test` | Offer structures, pricing, conversion predictions |
+| `revenue-intel` | Revenue Intel Engine | `deal_analysis`, `forecast`, `enrichment` | AOV, LTV, deal scores, revenue projections |
+| `umdm-etl` | UMDM | `sync_data`, `governance_check`, `anomaly_detect` | Cross-channel metrics, governance violations, anomalies |
+| `cro-agent` | Clarity CRO | `score_page`, `heatmap_analysis` | CRO scores, objection patterns, conversion blockers |
+| `tracking-intel` | Ad Campaign Engine | `pixel_audit`, `capi_check` | Tracking health, pixel status, event coverage |
+
+### 3.7 Pre-Built Coordination Workflows
+
+#### Workflow 1: Creative → Score → Launch Pipeline
+
+```
+creative-factory generates batch of 20 creatives
+    │
+    ▼
+creative-factory SENDS to creative-scorer:
+    "Score these 20 creatives: [creative_ids]"
+    │
+    ▼
+creative-scorer processes all 20, SENDS results back:
+    {scored: [{id, score, verdict}...], launch_ready: [ids], rework: [ids]}
+    │
+    ▼
+creative-factory ASKS campaign-ops:
+    "Launch these 8 approved creatives into campaign X. Confirm launch."
+    │  (blocks until campaign-ops confirms)
+    │
+    ▼
+campaign-ops launches, REPLIES:
+    {launched: true, campaign_id: "xxx", ad_set_ids: [...]}
+    │
+    ▼
+creative-factory logs results, notifies human via UPDATE escalation
+```
+
+#### Workflow 2: Fatigue Detection → Auto-Pause → Refresh
+
+```
+creative-scorer detects fatigue (score > 80) on creative C-123
+    │
+    ▼
+creative-scorer SENDS to campaign-ops:
+    {action: "pause_creative", creative_id: "C-123", reason: "fatigue_score_85"}
+    │
+    ▼
+campaign-ops pauses the ad set, SENDS to creative-factory:
+    {action: "generate_replacement", original_id: "C-123", campaign_id: "X"}
+    │
+    ▼
+creative-factory generates replacement, SENDS to creative-scorer for scoring
+    │
+    ▼
+(Pipeline continues from Workflow 1)
+```
+
+#### Workflow 3: Growth Stage Transition → Full Re-Strategy
+
+```
+dtc-strategist detects Stage 1 → Stage 2 transition
+    │
+    ▼
+dtc-strategist ASKS budget-optimizer:
+    "Current daily spend and recommended Stage 2 allocation?"
+    │  (blocks)
+    │
+    ▼
+budget-optimizer REPLIES:
+    {current_daily: 150, recommended: {meta: 200, google: 100}, scaling_signal: "vertical"}
+    │
+    ▼
+dtc-strategist ASKS audience-builder:
+    "Current top-performing audiences and recommended Stage 2 expansion?"
+    │  (blocks)
+    │
+    ▼
+audience-builder REPLIES:
+    {top_audiences: [...], expansion: [{type: "lookalike", seed: "...", size: "3%"}]}
+    │
+    ▼
+dtc-strategist generates full Stage 2 strategy document
+    │
+    ▼
+dtc-strategist ESCALATES (INTERVIEW tier) to human:
+    "Stage transition detected. Approve new strategy? [Yes/No/Modify]"
+    Questions: [{budget_approval}, {audience_approval}, {timeline}]
+```
+
+#### Workflow 4: Cross-App Offer Pricing
+
+```
+offer-architect building new upsell for FGS
+    │
+    ▼
+offer-architect ASKS revenue-intel:
+    "What is current AOV, LTV, and second-purchase rate for 'personalized gifts' category?"
+    │  (blocks)
+    │
+    ▼
+revenue-intel REPLIES:
+    {aov: 42.50, ltv: 127.80, second_purchase_rate: 0.31, avg_days_to_second: 45}
+    │
+    ▼
+offer-architect ASKS umdm-etl:
+    "What is blended ROAS and CPA for Meta campaigns targeting gift buyers?"
+    │  (blocks)
+    │
+    ▼
+umdm-etl REPLIES:
+    {blended_roas: 3.2, meta_cpa: 18.50, google_cpa: 22.10}
+    │
+    ▼
+offer-architect calculates optimal upsell price using LTV and CPA data
+    │
+    ▼
+offer-architect SENDS to cro-agent:
+    "Score this offer page for conversion optimization: [page_url]"
+```
+
+---
+
+## 4. Technical Specifications
+
+### 4.1 Supabase Schema
+
+```sql
+-- ============================================================
+-- AGENT INTERCOM PROTOCOL (AIP) — SUPABASE SCHEMA
+-- ============================================================
+-- Run on: Supabase self-hosted (existing instance)
+-- Database: PostgreSQL 15+
+-- Requires: Realtime enabled on all tables below
+-- ============================================================
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================================
+-- TABLE 1: Agent Sessions (Registry + Presence)
+-- ============================================================
+CREATE TABLE agent_intercom_sessions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+
+    -- Identity
+    agent_id VARCHAR(100) NOT NULL,         -- unique agent identifier (e.g., "creative-scorer")
+    agent_name VARCHAR(200) NOT NULL,       -- human-readable name
+    app_source VARCHAR(100) NOT NULL,       -- which app this agent belongs to
+    instance_id VARCHAR(100),               -- for multiple instances of same agent
+
+    -- Capabilities (what this agent can do / answer)
+    capabilities TEXT[] DEFAULT '{}',       -- e.g., {"score_creative", "fatigue_detection"}
+    can_answer TEXT[] DEFAULT '{}',         -- natural language descriptions of what it can answer
+
+    -- Presence
+    status VARCHAR(20) DEFAULT 'idle' CHECK (status IN (
+        'idle', 'thinking', 'processing', 'waiting', 'blocked', 'offline'
+    )),
+    current_task TEXT,                      -- what the agent is currently working on
+    heartbeat_at TIMESTAMPTZ DEFAULT NOW(),
+
+    -- Metadata
+    model VARCHAR(100),                     -- LLM model being used (if applicable)
+    version VARCHAR(20),                    -- agent version
+    metadata JSONB DEFAULT '{}',            -- extensible metadata
+
+    -- Timestamps
+    registered_at TIMESTAMPTZ DEFAULT NOW(),
+    last_message_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    -- Constraints
+    UNIQUE(agent_id, instance_id)
+);
+
+-- Indexes for fast lookup
+CREATE INDEX idx_sessions_agent_id ON agent_intercom_sessions(agent_id);
+CREATE INDEX idx_sessions_app_source ON agent_intercom_sessions(app_source);
+CREATE INDEX idx_sessions_status ON agent_intercom_sessions(status);
+CREATE INDEX idx_sessions_heartbeat ON agent_intercom_sessions(heartbeat_at);
+CREATE INDEX idx_sessions_capabilities ON agent_intercom_sessions USING GIN(capabilities);
+
+-- Auto-cleanup: mark stale sessions (no heartbeat > 2 minutes) as offline
+-- (Implemented via cron or Supabase Edge Function)
+
+-- ============================================================
+-- TABLE 2: Messages (Core Communication)
+-- ============================================================
+CREATE TABLE agent_intercom_messages (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+
+    -- Routing
+    sender_id VARCHAR(100) NOT NULL,        -- agent_id of sender
+    receiver_id VARCHAR(100) NOT NULL,      -- agent_id of receiver (or "__broadcast__")
+    sender_session_id UUID REFERENCES agent_intercom_sessions(id),
+    receiver_session_id UUID REFERENCES agent_intercom_sessions(id),
+
+    -- Message type
+    message_type VARCHAR(20) NOT NULL CHECK (message_type IN (
+        'send',         -- fire-and-forget notification
+        'ask',          -- blocking question (expects reply)
+        'reply',        -- response to an ask
+        'broadcast'     -- sent to all agents
+    )),
+
+    -- Threading
+    reply_to_message_id UUID REFERENCES agent_intercom_messages(id),
+    conversation_id UUID,                   -- groups related messages
+
+    -- Content
+    payload JSONB NOT NULL,                 -- structured message content
+    -- payload schema:
+    -- For send/broadcast: {text: string, data?: object, attachments?: array}
+    -- For ask:            {question: string, context?: object, required_fields?: string[], timeout_minutes?: number}
+    -- For reply:          {answer: string, data?: object}
+
+    -- Delivery
+    expects_reply BOOLEAN DEFAULT false,
+    status VARCHAR(20) DEFAULT 'sent' CHECK (status IN (
+        'sent',         -- message inserted, not yet received
+        'delivered',    -- receiver acknowledged receipt
+        'processing',   -- receiver is working on it
+        'completed',    -- fully processed (reply sent if expected)
+        'expired',      -- ask timed out without reply
+        'failed'        -- delivery or processing failed
+    )),
+    error_message TEXT,
+
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    delivered_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,                 -- for ask messages: created_at + timeout
+
+    -- Metadata
+    metadata JSONB DEFAULT '{}'
+);
+
+-- Indexes for message routing and queries
+CREATE INDEX idx_messages_receiver ON agent_intercom_messages(receiver_id, status);
+CREATE INDEX idx_messages_sender ON agent_intercom_messages(sender_id);
+CREATE INDEX idx_messages_reply_to ON agent_intercom_messages(reply_to_message_id);
+CREATE INDEX idx_messages_conversation ON agent_intercom_messages(conversation_id);
+CREATE INDEX idx_messages_type_status ON agent_intercom_messages(message_type, status);
+CREATE INDEX idx_messages_created ON agent_intercom_messages(created_at DESC);
+CREATE INDEX idx_messages_expires ON agent_intercom_messages(expires_at) WHERE expires_at IS NOT NULL;
+
+-- ============================================================
+-- TABLE 3: Escalations (Human-in-the-Loop)
+-- ============================================================
+CREATE TABLE agent_intercom_escalations (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+
+    -- Source agent
+    agent_id VARCHAR(100) NOT NULL,
+    agent_session_id UUID REFERENCES agent_intercom_sessions(id),
+
+    -- Escalation tier
+    tier VARCHAR(20) NOT NULL CHECK (tier IN (
+        'blocking',     -- needs immediate human decision (agent waits)
+        'interview',    -- needs multiple structured answers (agent waits)
+        'update'        -- fire-and-forget progress notification
+    )),
+
+    -- Content
+    subject TEXT NOT NULL,                  -- one-line summary
+    context JSONB,                          -- background data
+    questions JSONB,                        -- for interview tier:
+    -- [{id: string, question: string, type: "text"|"choice"|"boolean", options?: string[]}]
+
+    -- Response
+    response JSONB,                         -- human's response
+    -- For blocking: {decision: string, notes?: string}
+    -- For interview: {responses: [{id: string, value: string}]}
+    responded_by VARCHAR(100),              -- Slack user who responded
+
+    -- Status
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN (
+        'pending', 'notified', 'responded', 'expired', 'cancelled'
+    )),
+
+    -- Slack integration
+    slack_channel VARCHAR(20),
+    slack_message_ts VARCHAR(30),
+    slack_thread_ts VARCHAR(30),
+
+    -- Timing
+    timeout_minutes INTEGER DEFAULT 10,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    notified_at TIMESTAMPTZ,
+    responded_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_escalations_agent ON agent_intercom_escalations(agent_id);
+CREATE INDEX idx_escalations_status ON agent_intercom_escalations(status);
+CREATE INDEX idx_escalations_tier ON agent_intercom_escalations(tier, status);
+
+-- ============================================================
+-- TABLE 4: Audit Log (Full Communication History)
+-- ============================================================
+CREATE TABLE agent_intercom_audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    event_type VARCHAR(30) NOT NULL,        -- register, deregister, send, ask, reply, escalate, timeout, error
+    agent_id VARCHAR(100),
+    target_agent_id VARCHAR(100),
+    message_id UUID,
+    escalation_id UUID,
+    details JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_audit_event ON agent_intercom_audit_log(event_type);
+CREATE INDEX idx_audit_agent ON agent_intercom_audit_log(agent_id);
+CREATE INDEX idx_audit_created ON agent_intercom_audit_log(created_at DESC);
+
+-- ============================================================
+-- ROW LEVEL SECURITY
+-- ============================================================
+ALTER TABLE agent_intercom_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_intercom_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_intercom_escalations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_intercom_audit_log ENABLE ROW LEVEL SECURITY;
+
+-- Service role (agents) can read/write all
+CREATE POLICY "service_role_all" ON agent_intercom_sessions
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_all" ON agent_intercom_messages
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_all" ON agent_intercom_escalations
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_all" ON agent_intercom_audit_log
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Authenticated users can read (for dashboard)
+CREATE POLICY "authenticated_read" ON agent_intercom_sessions
+    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "authenticated_read" ON agent_intercom_messages
+    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "authenticated_read" ON agent_intercom_escalations
+    FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "authenticated_read" ON agent_intercom_audit_log
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+-- ============================================================
+-- REALTIME ENABLEMENT
+-- ============================================================
+-- Enable Realtime on messages table for instant delivery
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_intercom_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_intercom_sessions;
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_intercom_escalations;
+
+-- ============================================================
+-- AUTO-EXPIRY FUNCTION (run via pg_cron every minute)
+-- ============================================================
+CREATE OR REPLACE FUNCTION expire_stale_asks() RETURNS void AS $$
+BEGIN
+    -- Expire asks that have timed out
+    UPDATE agent_intercom_messages
+    SET status = 'expired',
+        completed_at = NOW()
+    WHERE message_type = 'ask'
+      AND status IN ('sent', 'delivered', 'processing')
+      AND expires_at IS NOT NULL
+      AND expires_at < NOW();
+
+    -- Expire escalations that have timed out
+    UPDATE agent_intercom_escalations
+    SET status = 'expired'
+    WHERE status IN ('pending', 'notified')
+      AND expires_at IS NOT NULL
+      AND expires_at < NOW();
+
+    -- Mark sessions with stale heartbeat as offline
+    UPDATE agent_intercom_sessions
+    SET status = 'offline'
+    WHERE status != 'offline'
+      AND heartbeat_at < NOW() - INTERVAL '2 minutes';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Schedule via pg_cron (if available) or Supabase Edge Function
+-- SELECT cron.schedule('expire-stale-asks', '* * * * *', 'SELECT expire_stale_asks()');
+```
+
+### 4.2 TypeScript Client Library — `@insightprofit/agent-intercom`
+
+This is the core client library that every ads app imports. It wraps Supabase operations into the pi-intercom-inspired API.
+
+#### File: `packages/agent-intercom/src/client.ts`
+
+```typescript
+import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
+
+// ── Types ────────────────────────────────────────────────────────────────
+
+export interface AgentConfig {
+  agentId: string;                    // unique identifier (e.g., "creative-scorer")
+  agentName: string;                  // human-readable name
+  appSource: string;                  // which app (e.g., "ad-campaign-engine")
+  capabilities: string[];             // what this agent can do
+  canAnswer: string[];                // what questions this agent can answer
+  model?: string;                     // LLM model
+  version?: string;                   // agent version
+  onMessage?: (msg: IncomingMessage) => Promise<void>;     // handler for incoming messages
+  onAsk?: (ask: IncomingAsk) => Promise<AskResponse>;      // handler for incoming asks
+  heartbeatIntervalMs?: number;       // default: 30000
+  askTimeoutMinutes?: number;         // default: 10
+}
+
+export interface IncomingMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  type: 'send' | 'broadcast';
+  payload: MessagePayload;
+  createdAt: string;
+}
+
+export interface IncomingAsk {
+  id: string;
+  senderId: string;
+  senderName: string;
+  payload: AskPayload;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface AskResponse {
+  answer: string;
+  data?: Record<string, unknown>;
+}
+
+export interface MessagePayload {
+  text: string;
+  data?: Record<string, unknown>;
+  attachments?: Attachment[];
+}
+
+export interface AskPayload {
+  question: string;
+  context?: Record<string, unknown>;
+  requiredFields?: string[];
+  timeoutMinutes?: number;
+}
+
+export interface ReplyPayload {
+  answer: string;
+  data?: Record<string, unknown>;
+}
+
+export interface Attachment {
+  type: 'snippet' | 'file' | 'context';
+  name: string;
+  content: string;
+  language?: string;
+}
+
+export interface AgentSession {
+  id: string;
+  agentId: string;
+  agentName: string;
+  appSource: string;
+  capabilities: string[];
+  canAnswer: string[];
+  status: string;
+  currentTask: string | null;
+  heartbeatAt: string;
+  model: string | null;
+}
+
+export interface SendResult {
+  messageId: string;
+  delivered: boolean;
+  error?: string;
+}
+
+export interface AskResult {
+  messageId: string;
+  reply: ReplyPayload | null;
+  timedOut: boolean;
+  error?: string;
+}
+
+export type EscalationTier = 'blocking' | 'interview' | 'update';
+
+export interface EscalationQuestion {
+  id: string;
+  question: string;
+  type: 'text' | 'choice' | 'boolean';
+  options?: string[];
+}
+
+// ── Client Class ─────────────────────────────────────────────────────────
+
+export class AgentIntercomClient {
+  private supabase: SupabaseClient;
+  private config: AgentConfig;
+  private sessionId: string | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private realtimeChannel: RealtimeChannel | null = null;
+  private connected = false;
+
+  constructor(
+    supabaseUrl: string,
+    supabaseServiceKey: string,
+    config: AgentConfig,
+  ) {
+    this.supabase = createClient(supabaseUrl, supabaseServiceKey);
+    this.config = {
+      heartbeatIntervalMs: 30000,
+      askTimeoutMinutes: 10,
+      ...config,
+    };
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────
+
+  async connect(): Promise<void> {
+    if (this.connected) throw new Error('Already connected');
+
+    // Register session
+    const { data, error } = await this.supabase
+      .from('agent_intercom_sessions')
+      .upsert({
+        agent_id: this.config.agentId,
+        agent_name: this.config.agentName,
+        app_source: this.config.appSource,
+        capabilities: this.config.capabilities,
+        can_answer: this.config.canAnswer,
+        status: 'idle',
+        heartbeat_at: new Date().toISOString(),
+        model: this.config.model || null,
+        version: this.config.version || null,
+        registered_at: new Date().toISOString(),
+      }, { onConflict: 'agent_id,instance_id' })
+      .select()
+      .single();
+
+    if (error) throw new Error(`Registration failed: ${error.message}`);
+    this.sessionId = data.id;
+
+    // Start heartbeat
+    this.heartbeatTimer = setInterval(
+      () => this.heartbeat(),
+      this.config.heartbeatIntervalMs!,
+    );
+
+    // Subscribe to incoming messages via Realtime
+    this.realtimeChannel = this.supabase
+      .channel('agent-intercom')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'agent_intercom_messages',
+          filter: `receiver_id=eq.${this.config.agentId}`,
+        },
+        (payload) => this.handleIncoming(payload.new),
+      )
+      .subscribe();
+
+    // Audit log
+    await this.audit('register', { agentId: this.config.agentId });
+
+    this.connected = true;
+  }
+
+  async disconnect(): Promise<void> {
+    if (!this.connected) return;
+
+    // Clear heartbeat
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
+    // Unsubscribe Realtime
+    if (this.realtimeChannel) {
+      await this.supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    // Mark session offline
+    if (this.sessionId) {
+      await this.supabase
+        .from('agent_intercom_sessions')
+        .update({ status: 'offline', updated_at: new Date().toISOString() })
+        .eq('id', this.sessionId);
+    }
+
+    await this.audit('deregister', { agentId: this.config.agentId });
+    this.connected = false;
+  }
+
+  // ── Discovery ──────────────────────────────────────────────────────
+
+  async listSessions(filter?: { appSource?: string; capability?: string }): Promise<AgentSession[]> {
+    let query = this.supabase
+      .from('agent_intercom_sessions')
+      .select('*')
+      .neq('status', 'offline')
+      .neq('agent_id', this.config.agentId);
+
+    if (filter?.appSource) {
+      query = query.eq('app_source', filter.appSource);
+    }
+    if (filter?.capability) {
+      query = query.contains('capabilities', [filter.capability]);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`List sessions failed: ${error.message}`);
+
+    return (data || []).map(row => ({
+      id: row.id,
+      agentId: row.agent_id,
+      agentName: row.agent_name,
+      appSource: row.app_source,
+      capabilities: row.capabilities,
+      canAnswer: row.can_answer,
+      status: row.status,
+      currentTask: row.current_task,
+      heartbeatAt: row.heartbeat_at,
+      model: row.model,
+    }));
+  }
+
+  async findAgent(capability: string): Promise<AgentSession | null> {
+    const sessions = await this.listSessions({ capability });
+    return sessions.find(s => s.status !== 'offline') || null;
+  }
+
+  // ── Messaging ──────────────────────────────────────────────────────
+
+  async send(to: string, payload: MessagePayload): Promise<SendResult> {
+    const messageId = uuidv4();
+    const { error } = await this.supabase
+      .from('agent_intercom_messages')
+      .insert({
+        id: messageId,
+        sender_id: this.config.agentId,
+        receiver_id: to,
+        sender_session_id: this.sessionId,
+        message_type: 'send',
+        payload,
+        expects_reply: false,
+        status: 'sent',
+      });
+
+    if (error) return { messageId, delivered: false, error: error.message };
+
+    await this.audit('send', { to, messageId });
+    return { messageId, delivered: true };
+  }
+
+  async ask(to: string, payload: AskPayload): Promise<AskResult> {
+    const messageId = uuidv4();
+    const conversationId = uuidv4();
+    const timeoutMinutes = payload.timeoutMinutes || this.config.askTimeoutMinutes!;
+    const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000).toISOString();
+
+    // Insert the ask
+    const { error } = await this.supabase
+      .from('agent_intercom_messages')
+      .insert({
+        id: messageId,
+        sender_id: this.config.agentId,
+        receiver_id: to,
+        sender_session_id: this.sessionId,
+        message_type: 'ask',
+        conversation_id: conversationId,
+        payload,
+        expects_reply: true,
+        status: 'sent',
+        expires_at: expiresAt,
+      });
+
+    if (error) return { messageId, reply: null, timedOut: false, error: error.message };
+
+    // Update own status
+    await this.updateStatus('waiting', `Waiting for reply from ${to}`);
+    await this.audit('ask', { to, messageId, question: payload.question });
+
+    // Wait for reply via polling (Realtime is primary, polling is fallback)
+    const reply = await this.waitForReply(messageId, timeoutMinutes);
+
+    // Restore status
+    await this.updateStatus('idle');
+
+    if (!reply) {
+      return { messageId, reply: null, timedOut: true };
+    }
+
+    return { messageId, reply, timedOut: false };
+  }
+
+  async reply(toMessageId: string, payload: ReplyPayload): Promise<SendResult> {
+    // Look up the original ask to find sender
+    const { data: originalMsg, error: lookupError } = await this.supabase
+      .from('agent_intercom_messages')
+      .select('sender_id, conversation_id')
+      .eq('id', toMessageId)
+      .single();
+
+    if (lookupError || !originalMsg) {
+      return { messageId: '', delivered: false, error: 'Original message not found' };
+    }
+
+    const messageId = uuidv4();
+    const { error } = await this.supabase
+      .from('agent_intercom_messages')
+      .insert({
+        id: messageId,
+        sender_id: this.config.agentId,
+        receiver_id: originalMsg.sender_id,
+        sender_session_id: this.sessionId,
+        message_type: 'reply',
+        reply_to_message_id: toMessageId,
+        conversation_id: originalMsg.conversation_id,
+        payload,
+        expects_reply: false,
+        status: 'sent',
+      });
+
+    if (error) return { messageId, delivered: false, error: error.message };
+
+    // Mark original ask as completed
+    await this.supabase
+      .from('agent_intercom_messages')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', toMessageId);
+
+    await this.audit('reply', { toMessageId, messageId });
+    return { messageId, delivered: true };
+  }
+
+  async broadcast(payload: MessagePayload): Promise<SendResult> {
+    const messageId = uuidv4();
+    const { error } = await this.supabase
+      .from('agent_intercom_messages')
+      .insert({
+        id: messageId,
+        sender_id: this.config.agentId,
+        receiver_id: '__broadcast__',
+        sender_session_id: this.sessionId,
+        message_type: 'broadcast',
+        payload,
+        expects_reply: false,
+        status: 'sent',
+      });
+
+    if (error) return { messageId, delivered: false, error: error.message };
+    return { messageId, delivered: true };
+  }
+
+  // ── Escalation ─────────────────────────────────────────────────────
+
+  async escalate(
+    tier: EscalationTier,
+    subject: string,
+    options: {
+      context?: Record<string, unknown>;
+      questions?: EscalationQuestion[];
+      timeoutMinutes?: number;
+    } = {},
+  ): Promise<{ escalationId: string; response: Record<string, unknown> | null; expired: boolean }> {
+    const escalationId = uuidv4();
+    const timeoutMinutes = options.timeoutMinutes || (tier === 'interview' ? 30 : 10);
+    const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000).toISOString();
+
+    const { error } = await this.supabase
+      .from('agent_intercom_escalations')
+      .insert({
+        id: escalationId,
+        agent_id: this.config.agentId,
+        agent_session_id: this.sessionId,
+        tier,
+        subject,
+        context: options.context || {},
+        questions: options.questions || null,
+        status: 'pending',
+        timeout_minutes: timeoutMinutes,
+        expires_at: expiresAt,
+      });
+
+    if (error) throw new Error(`Escalation failed: ${error.message}`);
+
+    await this.audit('escalate', { tier, subject, escalationId });
+
+    // For UPDATE tier: fire-and-forget
+    if (tier === 'update') {
+      return { escalationId, response: null, expired: false };
+    }
+
+    // For BLOCKING and INTERVIEW: wait for response
+    await this.updateStatus('blocked', `Escalated: ${subject}`);
+
+    const response = await this.waitForEscalationResponse(escalationId, timeoutMinutes);
+
+    await this.updateStatus('idle');
+
+    return {
+      escalationId,
+      response,
+      expired: response === null,
+    };
+  }
+
+  // ── Status ─────────────────────────────────────────────────────────
+
+  async updateStatus(status: string, currentTask?: string): Promise<void> {
+    if (!this.sessionId) return;
+    await this.supabase
+      .from('agent_intercom_sessions')
+      .update({
+        status,
+        current_task: currentTask || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', this.sessionId);
+  }
+
+  // ── Private Methods ────────────────────────────────────────────────
+
+  private async heartbeat(): Promise<void> {
+    if (!this.sessionId) return;
+    await this.supabase
+      .from('agent_intercom_sessions')
+      .update({ heartbeat_at: new Date().toISOString() })
+      .eq('id', this.sessionId);
+  }
+
+  private async handleIncoming(row: Record<string, unknown>): Promise<void> {
+    const messageType = row.message_type as string;
+
+    // Acknowledge delivery
+    await this.supabase
+      .from('agent_intercom_messages')
+      .update({ status: 'delivered', delivered_at: new Date().toISOString() })
+      .eq('id', row.id);
+
+    if (messageType === 'send' || messageType === 'broadcast') {
+      // Get sender name for context
+      const senderName = await this.getSenderName(row.sender_id as string);
+      if (this.config.onMessage) {
+        await this.config.onMessage({
+          id: row.id as string,
+          senderId: row.sender_id as string,
+          senderName,
+          type: messageType as 'send' | 'broadcast',
+          payload: row.payload as MessagePayload,
+          createdAt: row.created_at as string,
+        });
+      }
+    } else if (messageType === 'ask') {
+      const senderName = await this.getSenderName(row.sender_id as string);
+      if (this.config.onAsk) {
+        // Mark as processing
+        await this.supabase
+          .from('agent_intercom_messages')
+          .update({ status: 'processing' })
+          .eq('id', row.id);
+
+        await this.updateStatus('processing', `Answering ${senderName}`);
+
+        const response = await this.config.onAsk({
+          id: row.id as string,
+          senderId: row.sender_id as string,
+          senderName,
+          payload: row.payload as AskPayload,
+          createdAt: row.created_at as string,
+          expiresAt: row.expires_at as string,
+        });
+
+        // Auto-reply
+        await this.reply(row.id as string, response);
+        await this.updateStatus('idle');
+      }
+    }
+    // 'reply' type messages are handled by waitForReply()
+  }
+
+  private async waitForReply(
+    askMessageId: string,
+    timeoutMinutes: number,
+  ): Promise<ReplyPayload | null> {
+    const deadline = Date.now() + timeoutMinutes * 60 * 1000;
+    const pollIntervalMs = 3000;
+
+    while (Date.now() < deadline) {
+      const { data } = await this.supabase
+        .from('agent_intercom_messages')
+        .select('payload')
+        .eq('reply_to_message_id', askMessageId)
+        .eq('message_type', 'reply')
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        return data.payload as ReplyPayload;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+
+    // Timeout — mark original ask as expired
+    await this.supabase
+      .from('agent_intercom_messages')
+      .update({ status: 'expired', completed_at: new Date().toISOString() })
+      .eq('id', askMessageId);
+
+    return null;
+  }
+
+  private async waitForEscalationResponse(
+    escalationId: string,
+    timeoutMinutes: number,
+  ): Promise<Record<string, unknown> | null> {
+    const deadline = Date.now() + timeoutMinutes * 60 * 1000;
+    const pollIntervalMs = 5000;
+
+    while (Date.now() < deadline) {
+      const { data } = await this.supabase
+        .from('agent_intercom_escalations')
+        .select('response, status')
+        .eq('id', escalationId)
+        .single();
+
+      if (data?.status === 'responded' && data.response) {
+        return data.response as Record<string, unknown>;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+
+    return null;
+  }
+
+  private async getSenderName(agentId: string): Promise<string> {
+    const { data } = await this.supabase
+      .from('agent_intercom_sessions')
+      .select('agent_name')
+      .eq('agent_id', agentId)
+      .maybeSingle();
+    return data?.agent_name || agentId;
+  }
+
+  private async audit(eventType: string, details: Record<string, unknown>): Promise<void> {
+    await this.supabase
+      .from('agent_intercom_audit_log')
+      .insert({
+        event_type: eventType,
+        agent_id: this.config.agentId,
+        target_agent_id: (details.to as string) || null,
+        message_id: (details.messageId as string) || null,
+        escalation_id: (details.escalationId as string) || null,
+        details,
+      });
+  }
+}
+```
+
+#### File: `packages/agent-intercom/src/index.ts`
+
+```typescript
+export { AgentIntercomClient } from './client';
+export type {
+  AgentConfig,
+  IncomingMessage,
+  IncomingAsk,
+  AskResponse,
+  MessagePayload,
+  AskPayload,
+  ReplyPayload,
+  Attachment,
+  AgentSession,
+  SendResult,
+  AskResult,
+  EscalationTier,
+  EscalationQuestion,
+} from './client';
+```
+
+### 4.3 Convex Integration Layer
+
+Since our ads apps use Convex, we need a bridge that lets Convex actions call the Supabase-backed AIP.
+
+#### File: `convex/agentIntercom.ts` (Add to each Convex app)
+
+```typescript
+"use node";
+import { action } from "./_generated/server";
+import { v } from "convex/values";
+import { AgentIntercomClient } from "@insightprofit/agent-intercom";
+
+// ── Shared client factory ────────────────────────────────────────────
+
+function createIntercomClient(agentId: string, agentName: string, appSource: string) {
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
+
+  return new AgentIntercomClient(supabaseUrl, supabaseKey, {
+    agentId,
+    agentName,
+    appSource,
+    capabilities: [],
+    canAnswer: [],
+  });
+}
+
+// ── Actions ──────────────────────────────────────────────────────────
+
+export const sendMessage = action({
+  args: {
+    fromAgentId: v.string(),
+    fromAgentName: v.string(),
+    toAgentId: v.string(),
+    text: v.string(),
+    data: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const client = createIntercomClient(args.fromAgentId, args.fromAgentName, "ad-campaign-engine");
+    await client.connect();
+    try {
+      const result = await client.send(args.toAgentId, {
+        text: args.text,
+        data: args.data || undefined,
+      });
+      return result;
+    } finally {
+      await client.disconnect();
+    }
+  },
+});
+
+export const askAgent = action({
+  args: {
+    fromAgentId: v.string(),
+    fromAgentName: v.string(),
+    toAgentId: v.string(),
+    question: v.string(),
+    context: v.optional(v.any()),
+    timeoutMinutes: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const client = createIntercomClient(args.fromAgentId, args.fromAgentName, "ad-campaign-engine");
+    await client.connect();
+    try {
+      const result = await client.ask(args.toAgentId, {
+        question: args.question,
+        context: args.context || undefined,
+        timeoutMinutes: args.timeoutMinutes || 10,
+      });
+      return result;
+    } finally {
+      await client.disconnect();
+    }
+  },
+});
+
+export const replyToAsk = action({
+  args: {
+    agentId: v.string(),
+    agentName: v.string(),
+    originalMessageId: v.string(),
+    answer: v.string(),
+    data: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const client = createIntercomClient(args.agentId, args.agentName, "ad-campaign-engine");
+    await client.connect();
+    try {
+      const result = await client.reply(args.originalMessageId, {
+        answer: args.answer,
+        data: args.data || undefined,
+      });
+      return result;
+    } finally {
+      await client.disconnect();
+    }
+  },
+});
+
+export const listActiveSessions = action({
+  args: {
+    capability: v.optional(v.string()),
+    appSource: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const client = createIntercomClient("system", "System", "ad-campaign-engine");
+    await client.connect();
+    try {
+      return await client.listSessions({
+        capability: args.capability || undefined,
+        appSource: args.appSource || undefined,
+      });
+    } finally {
+      await client.disconnect();
+    }
+  },
+});
+
+export const escalateToHuman = action({
+  args: {
+    agentId: v.string(),
+    agentName: v.string(),
+    tier: v.union(v.literal("blocking"), v.literal("interview"), v.literal("update")),
+    subject: v.string(),
+    context: v.optional(v.any()),
+    questions: v.optional(v.array(v.object({
+      id: v.string(),
+      question: v.string(),
+      type: v.union(v.literal("text"), v.literal("choice"), v.literal("boolean")),
+      options: v.optional(v.array(v.string())),
+    }))),
+  },
+  handler: async (ctx, args) => {
+    const client = createIntercomClient(args.agentId, args.agentName, "ad-campaign-engine");
+    await client.connect();
+    try {
+      return await client.escalate(args.tier, args.subject, {
+        context: args.context || undefined,
+        questions: args.questions || undefined,
+      });
+    } finally {
+      await client.disconnect();
+    }
+  },
+});
+```
+
+### 4.4 Command Center Dashboard Component
+
+#### File: `src/views/AgentIntercomView.tsx` (Add to Command Center v2)
+
+```tsx
+// Agent Intercom Dashboard — Real-time monitoring of agent sessions,
+// messages, and escalations. Supabase Realtime subscription for live updates.
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+interface AgentSession {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  app_source: string;
+  capabilities: string[];
+  status: string;
+  current_task: string | null;
+  heartbeat_at: string;
+}
+
+interface IntercomMessage {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  message_type: string;
+  payload: Record<string, unknown>;
+  status: string;
+  created_at: string;
+}
+
+interface Escalation {
+  id: string;
+  agent_id: string;
+  tier: string;
+  subject: string;
+  status: string;
+  created_at: string;
+}
+
+export default function AgentIntercomView() {
+  const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [messages, setMessages] = useState<IntercomMessage[]>([]);
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
+  const [activeTab, setActiveTab] = useState<'sessions' | 'messages' | 'escalations'>('sessions');
+
+  // Initialize Supabase client and subscribe to Realtime
+  useEffect(() => {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+
+    // Fetch initial data
+    const fetchData = async () => {
+      const [sessionsRes, messagesRes, escalationsRes] = await Promise.all([
+        supabase.from('agent_intercom_sessions').select('*').neq('status', 'offline').order('heartbeat_at', { ascending: false }),
+        supabase.from('agent_intercom_messages').select('*').order('created_at', { ascending: false }).limit(100),
+        supabase.from('agent_intercom_escalations').select('*').order('created_at', { ascending: false }).limit(50),
+      ]);
+
+      if (sessionsRes.data) setSessions(sessionsRes.data);
+      if (messagesRes.data) setMessages(messagesRes.data);
+      if (escalationsRes.data) setEscalations(escalationsRes.data);
+    };
+
+    fetchData();
+
+    // Subscribe to Realtime updates
+    const channel = supabase
+      .channel('intercom-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_intercom_sessions' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_intercom_messages' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_intercom_escalations' }, () => fetchData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Component renders session cards, message timeline, escalation queue
+  // (Full JSX implementation for the harness to build)
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">🔌 Agent Intercom — Live Dashboard</h1>
+
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b">
+        {(['sessions', 'messages', 'escalations'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 capitalize ${activeTab === tab ? 'border-b-2 border-blue-500 font-semibold' : 'text-gray-500'}`}
+          >
+            {tab} ({tab === 'sessions' ? sessions.length : tab === 'messages' ? messages.length : escalations.filter(e => e.status === 'pending').length})
+          </button>
+        ))}
+      </div>
+
+      {/* Sessions Tab */}
+      {activeTab === 'sessions' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sessions.map(session => (
+            <div key={session.id} className="border rounded-lg p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">{session.agent_name}</span>
+                <span className={`px-2 py-0.5 rounded text-xs ${
+                  session.status === 'idle' ? 'bg-green-100 text-green-800' :
+                  session.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                  session.status === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
+                  session.status === 'blocked' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {session.status}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500">{session.app_source}</div>
+              {session.current_task && (
+                <div className="text-sm italic">📋 {session.current_task}</div>
+              )}
+              <div className="flex flex-wrap gap-1">
+                {session.capabilities.slice(0, 4).map(cap => (
+                  <span key={cap} className="text-xs bg-gray-100 px-2 py-0.5 rounded">{cap}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Messages Tab */}
+      {activeTab === 'messages' && (
+        <div className="space-y-2">
+          {messages.map(msg => (
+            <div key={msg.id} className="border rounded p-3 flex items-start gap-3">
+              <span className={`text-xs px-2 py-0.5 rounded font-mono ${
+                msg.message_type === 'ask' ? 'bg-purple-100 text-purple-800' :
+                msg.message_type === 'reply' ? 'bg-green-100 text-green-800' :
+                msg.message_type === 'broadcast' ? 'bg-blue-100 text-blue-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {msg.message_type}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm">
+                  <span className="font-semibold">{msg.sender_id}</span>
+                  <span className="text-gray-400"> → </span>
+                  <span className="font-semibold">{msg.receiver_id}</span>
+                </div>
+                <div className="text-sm text-gray-600 truncate">
+                  {(msg.payload as any)?.text || (msg.payload as any)?.question || (msg.payload as any)?.answer || '—'}
+                </div>
+              </div>
+              <span className={`text-xs px-2 py-0.5 rounded ${
+                msg.status === 'completed' ? 'bg-green-100' :
+                msg.status === 'expired' ? 'bg-red-100' :
+                'bg-yellow-100'
+              }`}>
+                {msg.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Escalations Tab */}
+      {activeTab === 'escalations' && (
+        <div className="space-y-2">
+          {escalations.map(esc => (
+            <div key={esc.id} className={`border rounded p-3 ${
+              esc.status === 'pending' ? 'border-red-300 bg-red-50' : ''
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded font-mono ${
+                  esc.tier === 'blocking' ? 'bg-red-100 text-red-800' :
+                  esc.tier === 'interview' ? 'bg-purple-100 text-purple-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>
+                  {esc.tier}
+                </span>
+                <span className="font-semibold text-sm">{esc.agent_id}</span>
+                <span className="text-sm text-gray-500">{esc.subject}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 4.5 Environment Variables Required
+
+Add to each app's `.env` / Vercel environment:
+
+```bash
+# Agent Intercom Protocol
+SUPABASE_URL=https://your-supabase-instance.insightprofit.live
+SUPABASE_SERVICE_KEY=your-service-role-key
+SUPABASE_ANON_KEY=your-anon-key  # for dashboard only
+```
+
+---
+
+## 5. Implementation Plan
+
+### Phase 1: Foundation (Week 1) — Claude Code via Codex
+
+| Step | Task | Files | Harness |
+|------|------|-------|---------|
+| 1.1 | Run Supabase schema migration | `schema.sql` | Claude Code |
+| 1.2 | Create `@insightprofit/agent-intercom` package | `packages/agent-intercom/` | Claude Code |
+| 1.3 | Add `convex/agentIntercom.ts` to Ad Campaign Engine | `convex/agentIntercom.ts` | Codex |
+| 1.4 | Wire up env vars on Vercel for all apps | Vercel dashboard / CLI | Manual |
+| 1.5 | Write integration tests | `packages/agent-intercom/tests/` | Claude Code |
+
+### Phase 2: Agent Wiring (Week 2) — Claude Code via Cursor
+
+| Step | Task | Files | Harness |
+|------|------|-------|---------|
+| 2.1 | Wire Creative Scorer → Campaign Ops (fatigue auto-pause) | `convex/creativeScoring.ts` | Cursor |
+| 2.2 | Wire DTC Strategist → Budget Optimizer (stage transition) | `convex/growthStage.ts` | Cursor |
+| 2.3 | Wire UMDM ETL → Campaign Ops (governance violations) | `scripts/umdm_etl.py` | Claude Code |
+| 2.4 | Wire Offer Architect → Revenue Intel (pricing data) | `convex/godfatherOffers.ts` | Cursor |
+| 2.5 | Add onMessage/onAsk handlers to each agent module | All agent modules | Cursor |
+
+### Phase 3: Dashboard + Escalation (Week 3) — Claude Code via Codex
+
+| Step | Task | Files | Harness |
+|------|------|-------|---------|
+| 3.1 | Build Agent Intercom Dashboard in Command Center v2 | `src/views/AgentIntercomView.tsx` | Codex |
+| 3.2 | Wire Slack escalation webhook | `src/api/intercom-escalation/` | Claude Code |
+| 3.3 | Build escalation response handler (Slack → Supabase) | `src/api/intercom-response/` | Claude Code |
+| 3.4 | Add intercom status to Ops Command Center | `src/views/OpsView.tsx` | Cursor |
+
+### Phase 4: Validation + Go-Live (Week 4)
+
+| Step | Task |
+|------|------|
+| 4.1 | End-to-end test: Creative → Score → Launch pipeline |
+| 4.2 | End-to-end test: Fatigue → Pause → Refresh cycle |
+| 4.3 | Load test: 50 concurrent agents, 100 messages/minute |
+| 4.4 | Monitor for 48 hours in production |
+| 4.5 | Update all agent skills with AIP integration docs |
+
+---
+
+## 6. CLAUDE.md for Coding Harness
+
+This is the file that gets pushed to each repo for Claude Code / Codex / Cursor to follow.
+
+```markdown
+# CLAUDE.md — Agent Intercom Protocol Build Instructions
+
+## Project Context
+You are implementing the Agent Intercom Protocol (AIP) — a real-time inter-agent
+communication system for InsightProfit's ads-related AI agents. This enables
+agents across Ad Campaign Engine, Offer Engine, Revenue Intel Engine, and
+Command Center to discover each other, send messages, ask blocking questions,
+and escalate to human supervisors.
+
+## Architecture
+- **Data layer:** Supabase (self-hosted PostgreSQL + Realtime)
+- **Client library:** TypeScript package `@insightprofit/agent-intercom`
+- **App integration:** Convex actions call the client library
+- **Dashboard:** Next.js component in Command Center v2
+- **Escalation:** Supabase → Slack webhook → human response → Supabase
+
+## Tech Stack (DO NOT change)
+- Supabase (self-hosted) — PostgreSQL + Realtime + RLS
+- Convex — backend for Ad Campaign Engine, Offer Engine, Revenue Intel
+- Next.js 16 — Command Center v2 frontend
+- TypeScript — all new code
+- Tailwind CSS v4 — styling
+- Zod — payload validation
+
+## Key Files
+- `schema.sql` — Supabase migration (4 tables, indexes, RLS, functions)
+- `packages/agent-intercom/src/client.ts` — core client class
+- `packages/agent-intercom/src/index.ts` — public exports
+- `convex/agentIntercom.ts` — Convex action wrappers
+- `src/views/AgentIntercomView.tsx` — dashboard component
+
+## Critical Rules
+1. NEVER delete existing files or tables — this is ADDITIVE only
+2. NEVER modify existing Convex schema — add new modules alongside existing ones
+3. All Supabase queries use service_role key (not anon key) from agent code
+4. All Convex functions in agentIntercom.ts MUST be `"use node"` actions
+5. Realtime subscriptions use `postgres_changes` channel, NOT broadcast
+6. Polling fallback MUST exist for every Realtime subscription (3s interval)
+7. All messages MUST be logged to agent_intercom_audit_log
+8. Heartbeat interval: 30 seconds. Stale threshold: 2 minutes.
+9. Ask timeout: 10 minutes default, configurable per-call
+10. Escalation timeout: 10 minutes (blocking), 30 minutes (interview)
+
+## Testing Commands
+```bash
+# Run client library tests
+cd packages/agent-intercom && npx vitest run
+
+# Run Convex functions locally
+npx convex dev
+
+# Test Supabase Realtime
+npx ts-node scripts/test-realtime.ts
+
+# Verify schema
+psql $DATABASE_URL -f schema.sql --dry-run
+```
+
+## Done Criteria
+- [ ] All 4 Supabase tables created with indexes and RLS
+- [ ] expire_stale_asks() function deployed and tested
+- [ ] Client library: connect, disconnect, send, ask, reply, broadcast, escalate all working
+- [ ] Convex actions: sendMessage, askAgent, replyToAsk, listActiveSessions, escalateToHuman
+- [ ] Dashboard shows live sessions, message timeline, escalation queue
+- [ ] At least 2 agent-to-agent workflows tested end-to-end
+- [ ] All tests passing
+- [ ] No existing functionality broken
+```
+
+---
+
+## 7. Testing & Verification
+
+### 7.1 Unit Tests
+
+```typescript
+// packages/agent-intercom/tests/client.test.ts
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { AgentIntercomClient } from '../src/client';
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY!;
+
+describe('AgentIntercomClient', () => {
+  let agentA: AgentIntercomClient;
+  let agentB: AgentIntercomClient;
+
+  beforeAll(async () => {
+    agentA = new AgentIntercomClient(SUPABASE_URL, SUPABASE_KEY, {
+      agentId: 'test-agent-a',
+      agentName: 'Test Agent A',
+      appSource: 'test',
+      capabilities: ['test_capability'],
+      canAnswer: ['test questions'],
+    });
+
+    agentB = new AgentIntercomClient(SUPABASE_URL, SUPABASE_KEY, {
+      agentId: 'test-agent-b',
+      agentName: 'Test Agent B',
+      appSource: 'test',
+      capabilities: ['answer_capability'],
+      canAnswer: ['can answer test questions'],
+      onMessage: async (msg) => {
+        console.log('Agent B received:', msg.payload.text);
+      },
+      onAsk: async (ask) => {
+        return { answer: 'Test answer', data: { computed: true } };
+      },
+    });
+
+    await agentA.connect();
+    await agentB.connect();
+  });
+
+  afterAll(async () => {
+    await agentA.disconnect();
+    await agentB.disconnect();
+  });
+
+  it('should register and discover sessions', async () => {
+    const sessions = await agentA.listSessions();
+    expect(sessions.some(s => s.agentId === 'test-agent-b')).toBe(true);
+  });
+
+  it('should find agent by capability', async () => {
+    const agent = await agentA.findAgent('answer_capability');
+    expect(agent).not.toBeNull();
+    expect(agent!.agentId).toBe('test-agent-b');
+  });
+
+  it('should send fire-and-forget message', async () => {
+    const result = await agentA.send('test-agent-b', {
+      text: 'Hello from Agent A',
+      data: { important: true },
+    });
+    expect(result.delivered).toBe(true);
+  });
+
+  it('should ask and receive blocking reply', async () => {
+    const result = await agentA.ask('test-agent-b', {
+      question: 'What is the answer?',
+      context: { topic: 'test' },
+      timeoutMinutes: 1,
+    });
+    expect(result.timedOut).toBe(false);
+    expect(result.reply).not.toBeNull();
+    expect(result.reply!.answer).toBe('Test answer');
+    expect(result.reply!.data).toEqual({ computed: true });
+  });
+
+  it('should handle ask timeout gracefully', async () => {
+    // Create agent C with no onAsk handler (won't reply)
+    const agentC = new AgentIntercomClient(SUPABASE_URL, SUPABASE_KEY, {
+      agentId: 'test-agent-c',
+      agentName: 'Test Agent C (No Reply)',
+      appSource: 'test',
+      capabilities: [],
+      canAnswer: [],
+      askTimeoutMinutes: 0.1, // 6 seconds
+    });
+    await agentC.connect();
+
+    const result = await agentA.ask('test-agent-c', {
+      question: 'Will you reply?',
+      timeoutMinutes: 0.1, // 6 seconds
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.reply).toBeNull();
+
+    await agentC.disconnect();
+  });
+
+  it('should escalate to human (update tier)', async () => {
+    const result = await agentA.escalate('update', 'Test progress update', {
+      context: { progress: '50%' },
+    });
+    expect(result.escalationId).toBeDefined();
+    expect(result.expired).toBe(false);
+  });
+});
+```
+
+### 7.2 Integration Test Scenarios
+
+| Test | Agents Involved | Expected Outcome |
+|------|----------------|-----------------|
+| Creative scoring pipeline | creative-factory → creative-scorer → campaign-ops | Batch scored, top creatives launched |
+| Fatigue auto-pause | creative-scorer → campaign-ops → creative-factory | Fatigued ad paused, replacement generated |
+| Stage transition | dtc-strategist → budget-optimizer → audience-builder | New strategy with reallocated budget |
+| Cross-app pricing | offer-architect → revenue-intel → umdm-etl | Optimal price calculated from LTV + CPA |
+| Escalation round-trip | any-agent → Slack → human → agent | Agent unblocks with human decision |
+| Stale session cleanup | N/A (cron) | Offline sessions cleaned after 2 min |
+| Concurrent asks | 10 agents asking simultaneously | All receive replies, no deadlocks |
+
+---
+
+## 8. Appendices
+
+### 8.1 File Tree — What Gets Created
+
+```
+# NEW: Shared package (can be npm-published or local reference)
+packages/
+└── agent-intercom/
+    ├── package.json
+    ├── tsconfig.json
+    ├── src/
+    │   ├── index.ts
+    │   └── client.ts
+    └── tests/
+        └── client.test.ts
+
+# NEW: Supabase migration
+supabase/
+└── migrations/
+    └── 20260531_agent_intercom.sql
+
+# MODIFIED: Ad Campaign Engine (add Convex actions)
+ad-campaign-engine/
+└── convex/
+    └── agentIntercom.ts          # NEW file (additive, no existing files touched)
+
+# MODIFIED: Offer Engine v3 (add Convex actions)
+offer-stack-engine/
+└── convex/
+    └── agentIntercom.ts          # NEW file
+
+# MODIFIED: Revenue Intel Engine (add Convex actions)
+revenue-intel-engine/
+└── convex/
+    └── agentIntercom.ts          # NEW file
+
+# MODIFIED: Command Center v2 (add dashboard view)
+insightprofit-command-v2/
+└── src/
+    └── views/
+        └── AgentIntercomView.tsx  # NEW file
+```
+
+### 8.2 Cost Analysis
+
+| Component | Cost |
+|-----------|------|
+| Supabase (self-hosted) | $0 (already running) |
+| Supabase Realtime | $0 (self-hosted, no limits) |
+| PostgreSQL storage (messages) | ~50MB/month at scale |
+| Convex actions (Node.js) | Included in existing plan |
+| Development (Claude Code via Codex/Cursor) | Existing credits |
+| **Total incremental cost** | **$0/month** |
+
+### 8.3 Rollback Plan
+
+1. Drop Supabase tables: `DROP TABLE agent_intercom_*`
+2. Remove `convex/agentIntercom.ts` from each app
+3. Remove `AgentIntercomView.tsx` from Command Center
+4. No existing functionality is modified — rollback is clean deletion
+
+### 8.4 Dispatch Command
+
+To kick off the build via Agent Dispatch Bridge:
+
+```bash
+# Phase 1: Schema + Client Library
+uv run python skills/agent_dispatch_bridge/scripts/dispatch_task.py \
+  --repo ad-campaign-engine \
+  --agent codex \
+  --task "Implement Agent Intercom Protocol Phase 1: Run Supabase schema migration, create @insightprofit/agent-intercom client library, add convex/agentIntercom.ts. See CLAUDE.md for full spec." \
+  --priority high
+
+# Phase 2: Agent Wiring (per app)
+uv run python skills/agent_dispatch_bridge/scripts/dispatch_task.py \
+  --repo ad-campaign-engine \
+  --agent cursor \
+  --task "Wire AIP into existing agent modules: creativeScoring.ts, growthStage.ts, campaigns.ts. Add onMessage/onAsk handlers. See CLAUDE.md." \
+  --priority high
+
+# Phase 3: Dashboard
+uv run python skills/agent_dispatch_bridge/scripts/dispatch_task.py \
+  --repo insightprofit-command-v2 \
+  --agent codex \
+  --task "Build Agent Intercom Dashboard view with live Supabase Realtime. See CLAUDE.md." \
+  --priority medium
+```
+
+---
+
+*End of Document — AIP-001 v1.0*
+*Total: ~1,200 lines of specification across SOP, PRD, schema, client library, Convex integration, dashboard component, tests, and implementation plan.*
