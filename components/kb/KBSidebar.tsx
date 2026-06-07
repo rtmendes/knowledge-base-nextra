@@ -49,6 +49,14 @@ interface ContextMenu {
   catName: string
 }
 
+interface ItemContextMenu {
+  x: number
+  y: number
+  itemId: string
+  itemTitle: string
+  catId: string
+}
+
 // ── Icon Map ──────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, string> = {
@@ -110,7 +118,14 @@ export function KBSidebar({
 
   // ── Context menu ────────────────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
+  const [itemContextMenu, setItemContextMenu] = useState<ItemContextMenu | null>(null)
+  const [moveMenuOpen, setMoveMenuOpen] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  const itemContextMenuRef = useRef<HTMLDivElement>(null)
+
+  // ── Root-level drop zone ────────────────────────────────────────────────
+  const [dragOverRoot, setDragOverRoot] = useState(false)
+  const [showEmpty, setShowEmpty] = useState(true)
 
   // Sync categories from prop
   useEffect(() => { setCategories(categoriesProp) }, [categoriesProp])
@@ -149,6 +164,19 @@ export function KBSidebar({
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [contextMenu])
+
+  // Close item context menu on outside click
+  useEffect(() => {
+    if (!itemContextMenu) return
+    const close = (e: MouseEvent) => {
+      if (itemContextMenuRef.current && !itemContextMenuRef.current.contains(e.target as Node)) {
+        setItemContextMenu(null)
+        setMoveMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [itemContextMenu])
 
   // Focus rename input when it appears
   useEffect(() => {
@@ -265,6 +293,78 @@ export function KBSidebar({
       }
     } catch {}
   }, [onCategoryDelete])
+
+  // ── Item delete / move via context menu ──────────────────────────────────
+
+  const handleDeleteItem = useCallback(async (itemId: string, catId: string) => {
+    setItemContextMenu(null)
+    setMoveMenuOpen(false)
+    if (!confirm('Delete this page? This cannot be undone.')) return
+    try {
+      const res = await fetch('/api/kb/items/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', item_ids: [itemId] }),
+      })
+      if (res.ok) {
+        setCategoryItems(prev => ({
+          ...prev,
+          [catId]: (prev[catId] || []).filter(i => i.id !== itemId),
+        }))
+        // Decrement parent category count
+        setCategories(prev => prev.map(c => c.id === catId ? { ...c, item_count: Math.max(0, c.item_count - 1) } : c))
+      }
+    } catch {}
+  }, [])
+
+  const handleMoveItemToCategory = useCallback(async (itemId: string, fromCatId: string, toCatId: string) => {
+    setItemContextMenu(null)
+    setMoveMenuOpen(false)
+    if (fromCatId === toCatId) return
+    try {
+      const res = await fetch(`/api/kb/items/${itemId}/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: toCatId, parent_id: null }),
+      })
+      if (res.ok) {
+        // Optimistic: remove from old, invalidate new so it reloads
+        setCategoryItems(prev => {
+          const next = { ...prev }
+          next[fromCatId] = (next[fromCatId] || []).filter(i => i.id !== itemId)
+          delete next[toCatId]
+          return next
+        })
+        setCategories(prev => prev.map(c => {
+          if (c.id === fromCatId) return { ...c, item_count: Math.max(0, c.item_count - 1) }
+          if (c.id === toCatId) return { ...c, item_count: c.item_count + 1 }
+          return c
+        }))
+        if (expandedCategories.has(toCatId)) loadCategoryItems(toCatId)
+      }
+    } catch {}
+  }, [expandedCategories, loadCategoryItems])
+
+  // ── Root-level drop (un-nest category) ────────────────────────────────────
+
+  const handleDropOnRoot = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOverRoot(false)
+    const catId = e.dataTransfer.getData('application/kb-cat-id')
+    if (!catId) return
+    try {
+      const res = await fetch(`/api/kb/categories/${catId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parent_category_id: null }),
+      })
+      if (res.ok) {
+        setCategories(prev => prev.map(c => c.id === catId ? { ...c, parent_category_id: null } : c))
+        const updated = await res.json()
+        onCategoryUpdate?.(updated)
+      }
+    } catch {}
+  }, [onCategoryUpdate])
 
   // ── New sub-category ─────────────────────────────────────────────────────
 
@@ -443,28 +543,37 @@ export function KBSidebar({
     return { rootItems, childMap }
   }, [categoryItems])
 
+  // Show ALL categories — empty ones still need to be visible and editable.
+  // `showEmpty` toggle in the footer lets the user hide empty ones if they prefer.
   const categoryTree = useMemo(() => {
-    const rootCats = categories.filter(c => c.item_count > 0 && !c.parent_category_id)
+    const visible = (c: Category) => showEmpty || c.item_count > 0
+    const rootCats = categories.filter(c => !c.parent_category_id && visible(c))
     const childCatMap: Record<string, Category[]> = {}
     for (const c of categories) {
-      if (c.parent_category_id && c.item_count > 0) {
+      if (c.parent_category_id && visible(c)) {
         if (!childCatMap[c.parent_category_id]) childCatMap[c.parent_category_id] = []
         childCatMap[c.parent_category_id].push(c)
       }
     }
     return { rootCats, childCatMap }
-  }, [categories])
+  }, [categories, showEmpty])
 
   const filteredCategories = useMemo(() => {
     if (!sidebarFilter) return categoryTree.rootCats
     const q = sidebarFilter.toLowerCase()
     return categories.filter(c =>
-      c.item_count > 0 && (
+      !c.parent_category_id && (
         c.name.toLowerCase().includes(q) ||
         (categoryItems[c.id] || []).some(item => item.title.toLowerCase().includes(q))
       )
     )
   }, [categories, sidebarFilter, categoryItems, categoryTree.rootCats])
+
+  // Flat list of categories for the "Move to…" submenu
+  const allCategoriesFlat = useMemo(
+    () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
+    [categories]
+  )
 
   const isItemActive = (itemId: string) => pathname === `/kb/item/${itemId}`
   const isCategoryActive = (slug: string) => pathname === `/kb/${slug}`
@@ -484,6 +593,10 @@ export function KBSidebar({
           onDragOver={(e) => handleDragOverItem(e, item.id)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDropOnItem(e, item.id)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setItemContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id, itemTitle: item.title, catId })
+          }}
           className={`
             group/item flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-all cursor-pointer
             ${depth > 0 ? 'ml-3 pl-3 border-l border-gray-200 dark:border-gray-800' : ''}
@@ -845,13 +958,35 @@ export function KBSidebar({
 
           {/* Category Tree */}
           <div className="px-2">
-            <div className="flex items-center justify-between px-1 mb-1">
+            <div
+              onDragOver={(e) => {
+                if (!draggingCatId) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                setDragOverRoot(true)
+              }}
+              onDragLeave={() => setDragOverRoot(false)}
+              onDrop={handleDropOnRoot}
+              className={`flex items-center justify-between px-1 mb-1 rounded transition-colors ${
+                dragOverRoot ? 'bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-300' : ''
+              }`}
+              title={draggingCatId ? 'Drop here to move category to root level' : undefined}
+            >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-600">
-                Categories
+                {dragOverRoot ? '↑ Drop to un-nest' : 'Categories'}
               </span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-600 tabular-nums">
-                {categories.filter(c => c.item_count > 0).length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowEmpty(v => !v)}
+                  className="text-[9px] text-gray-400 dark:text-gray-600 hover:text-amber-500 transition-colors"
+                  title={showEmpty ? 'Hide empty categories' : 'Show empty categories'}
+                >
+                  {showEmpty ? 'hide empty' : 'show all'}
+                </button>
+                <span className="text-[10px] text-gray-400 dark:text-gray-600 tabular-nums">
+                  {categories.length}
+                </span>
+              </div>
             </div>
 
             {filteredCategories.map(cat => renderCategory(cat))}
@@ -873,8 +1008,8 @@ export function KBSidebar({
               ⌘K
             </kbd>
           </div>
-          <p className="mt-1.5 text-[9px] text-gray-300 dark:text-gray-700">
-            Double-click to rename · Drag to move · Right-click for options
+          <p className="mt-1.5 text-[9px] text-gray-300 dark:text-gray-700 leading-snug">
+            Double-click = rename · Drag = move/nest · Right-click = menu · Drop category on header = un-nest
           </p>
         </div>
       </aside>
@@ -910,6 +1045,73 @@ export function KBSidebar({
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             Delete category
+          </button>
+        </div>
+      )}
+
+      {/* Item Context Menu */}
+      {itemContextMenu && (
+        <div
+          ref={itemContextMenuRef}
+          style={{ top: itemContextMenu.y, left: itemContextMenu.x }}
+          className="fixed z-[200] py-1 w-52 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 text-xs"
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider truncate border-b border-gray-100 dark:border-gray-800 mb-1">
+            {itemContextMenu.itemTitle}
+          </div>
+
+          <button
+            onClick={() => {
+              startRenameItem(itemContextMenu.itemId, itemContextMenu.itemTitle, itemContextMenu.catId)
+              setItemContextMenu(null)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            Rename
+          </button>
+
+          {/* Move to → submenu */}
+          <button
+            onMouseEnter={() => setMoveMenuOpen(true)}
+            onClick={() => setMoveMenuOpen(v => !v)}
+            className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+              Move to…
+            </span>
+            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </button>
+
+          {moveMenuOpen && (
+            <div className="max-h-60 overflow-y-auto border-y border-gray-100 dark:border-gray-800 my-1 bg-gray-50/50 dark:bg-gray-950/50">
+              {allCategoriesFlat.map(c => (
+                <button
+                  key={c.id}
+                  disabled={c.id === itemContextMenu.catId}
+                  onClick={() => handleMoveItemToCategory(itemContextMenu.itemId, itemContextMenu.catId, c.id)}
+                  className={`w-full flex items-center gap-2 px-4 py-1 text-[11px] transition-colors ${
+                    c.id === itemContextMenu.catId
+                      ? 'text-gray-300 dark:text-gray-700 cursor-not-allowed'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-700 dark:hover:text-amber-300'
+                  }`}
+                >
+                  <span className="text-xs">{getCatIcon(c.icon)}</span>
+                  <span className="truncate">{c.name}</span>
+                  {c.id === itemContextMenu.catId && <span className="ml-auto text-[9px] italic">current</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+          <button
+            onClick={() => handleDeleteItem(itemContextMenu.itemId, itemContextMenu.catId)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            Delete page
           </button>
         </div>
       )}
