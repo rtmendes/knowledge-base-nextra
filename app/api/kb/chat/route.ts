@@ -939,10 +939,107 @@ ${pageBlock}${contextBlock}
 
 // ── Route Handler ─────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────────────────────
+// Conversation persistence
+// ──────────────────────────────────────────────────────────────────────────
+// Auto-save every chat to cos_conversations + cos_messages so the user can
+// browse past chats at /chief-of-staff/history and convert them into KB notes
+// or ClickUp tasks. Silent fallback if tables/columns missing — never blocks
+// the streaming reply.
+
+/** Find or create the conversation, write the user message. Returns conv id. */
+async function ensureConversationAndLogUser(
+  sessionId: string,
+  userContent: string,
+  isFirstMessage: boolean,
+): Promise<string | null> {
+  if (!supabaseAdmin) return null
+  try {
+    // Try to find existing conversation
+    const { data: existing } = await supabaseAdmin
+      .from('cos_conversations')
+      .select('id, message_count')
+      .eq('session_id', sessionId)
+      .maybeSingle()
+
+    let conversationId: string
+    if (existing) {
+      conversationId = existing.id
+      await supabaseAdmin
+        .from('cos_conversations')
+        .update({
+          last_message_at: new Date().toISOString(),
+          message_count: (existing.message_count || 0) + 1,
+        })
+        .eq('id', conversationId)
+    } else {
+      // First turn — derive a title from the user's question (truncated)
+      const title = userContent.length > 80
+        ? userContent.slice(0, 77).replace(/\s+\S*$/, '') + '…'
+        : userContent
+      const { data: created, error } = await supabaseAdmin
+        .from('cos_conversations')
+        .insert({
+          session_id: sessionId,
+          title,
+          summary: userContent.slice(0, 200),
+          message_count: 1,
+        })
+        .select('id')
+        .single()
+      if (error || !created) return null
+      conversationId = created.id
+    }
+
+    await supabaseAdmin.from('cos_messages').insert({
+      conversation_id: conversationId,
+      role: 'user',
+      content: userContent,
+    })
+
+    return conversationId
+  } catch (err) {
+    console.error('[kb-chat] ensureConversation failed:', err)
+    return null
+  }
+}
+
+/** Write the assistant message after streaming completes. */
+async function logAssistantMessage(
+  conversationId: string,
+  content: string,
+  sources: unknown[],
+  matchedEntities: unknown[],
+): Promise<void> {
+  if (!supabaseAdmin) return
+  try {
+    await supabaseAdmin.from('cos_messages').insert({
+      conversation_id: conversationId,
+      role: 'assistant',
+      content,
+      sources,
+      matched_entities: matchedEntities,
+      model: 'openai/gpt-4o-mini',
+    })
+    await supabaseAdmin
+      .from('cos_conversations')
+      .update({
+        last_message_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId)
+  } catch (err) {
+    console.error('[kb-chat] logAssistant failed:', err)
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { messages, pageContext } = body as { messages: ChatMessage[]; pageContext?: PageContext }
+    const { messages, pageContext, sessionId } = body as {
+      messages: ChatMessage[]
+      pageContext?: PageContext
+      sessionId?: string
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: 'Messages array required' }), {
@@ -1074,8 +1171,21 @@ export async function POST(req: NextRequest) {
       })),
     ]
 
+    // Persist user message + ensure conversation row exists BEFORE streaming.
+    // Capture conversationId so we can write the assistant message at the end.
+    const conversationId = sessionId
+      ? await ensureConversationAndLogUser(sessionId, lastUserMessage.content, messages.length === 1)
+      : null
+
+    let assistantBuffer = ''
     const stream = new ReadableStream({
       async start(controller) {
+        // Send conversationId/sessionId first so the widget can persist it
+        if (sessionId) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'session', sessionId, conversationId })}\n\n`)
+          )
+        }
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'sources', sources: sourcesPayload })}\n\n`)
         )
@@ -1104,6 +1214,7 @@ export async function POST(req: NextRequest) {
                 const parsed = JSON.parse(data)
                 const content = parsed.choices?.[0]?.delta?.content
                 if (content) {
+                  assistantBuffer += content
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify({ type: 'content', content })}\n\n`)
                   )
@@ -1117,6 +1228,10 @@ export async function POST(req: NextRequest) {
           console.error('[kb-chat] Stream error:', err)
         } finally {
           controller.close()
+          // Fire-and-forget: persist assistant message after stream closes.
+          if (conversationId && assistantBuffer) {
+            void logAssistantMessage(conversationId, assistantBuffer, sourcesPayload, matchedEntities)
+          }
         }
       },
     })

@@ -83,6 +83,18 @@ function renderMessageContent(content: string) {
 
 // ── Chief of Staff ────────────────────────────────────────────────────────
 
+// Generate a UUID v4 (no external dep — crypto.randomUUID exists in modern browsers)
+function newSessionId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  // RFC4122-ish fallback
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
+const SESSION_STORAGE_KEY = 'kb-cos-session-id'
+
 export function KBChatAssistant() {
   const [open, setOpen]                         = useState(false)
   const [messages, setMessages]                 = useState<ChatMessage[]>([])
@@ -91,10 +103,25 @@ export function KBChatAssistant() {
   const [streamingContent, setStreamingContent] = useState('')
   const [streamingSources, setStreamingSources] = useState<Source[]>([])
   const [pageContext, setPageContext]            = useState<PageContext | null>(null)
+  const [sessionId, setSessionId]                = useState<string>('')
+  // Per-message action state (saved/sent indicator after click)
+  const [msgActionState, setMsgActionState]      = useState<Record<number, string>>({})
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLInputElement>(null)
   const abortRef  = useRef<AbortController | null>(null)
+
+  // Hydrate sessionId from localStorage (or mint a new one)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let id = ''
+    try { id = window.localStorage.getItem(SESSION_STORAGE_KEY) || '' } catch { /* private mode */ }
+    if (!id) {
+      id = newSessionId()
+      try { window.localStorage.setItem(SESSION_STORAGE_KEY, id) } catch { /* ignore */ }
+    }
+    setSessionId(id)
+  }, [])
 
   // Read current page from browser
   useEffect(() => {
@@ -132,7 +159,11 @@ export function KBChatAssistant() {
       const res = await fetch('/api/kb/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })), pageContext }),
+        body: JSON.stringify({
+          messages: history.map(m => ({ role: m.role, content: m.content })),
+          pageContext,
+          sessionId: sessionId || undefined,
+        }),
         signal: ctrl.signal,
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({ error: 'error' }))).error || `HTTP ${res.status}`)
@@ -154,6 +185,13 @@ export function KBChatAssistant() {
           try {
             const p = JSON.parse(data)
             if (p.type === 'sources') { sources = p.sources || []; setStreamingSources(sources) }
+            else if (p.type === 'session' && p.sessionId) {
+              // Server confirms (or replaces) our sessionId; persist whatever it returns
+              if (p.sessionId !== sessionId) {
+                setSessionId(p.sessionId)
+                try { window.localStorage.setItem(SESSION_STORAGE_KEY, p.sessionId) } catch {}
+              }
+            }
             else if (p.type === 'content' && p.content) { accumulated += p.content; setStreamingContent(accumulated) }
           } catch { /* skip */ }
         }
@@ -165,7 +203,51 @@ export function KBChatAssistant() {
       if (err.name === 'AbortError') return
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}. Please try again.` }])
     } finally { setLoading(false); abortRef.current = null }
-  }, [input, loading, messages, pageContext])
+  }, [input, loading, messages, pageContext, sessionId])
+
+  // ── New chat: rotate sessionId so the next message starts fresh ────────
+  const newChat = useCallback(() => {
+    const id = newSessionId()
+    setSessionId(id)
+    try { window.localStorage.setItem(SESSION_STORAGE_KEY, id) } catch {}
+    setMessages([]); setStreamingContent(''); setStreamingSources([]); setMsgActionState({})
+    if (abortRef.current) abortRef.current.abort(); setLoading(false)
+  }, [])
+
+  // ── Save current conversation as a KB note ─────────────────────────────
+  const saveAsNote = useCallback(async (msgIdx: number) => {
+    if (!sessionId) return
+    setMsgActionState(s => ({ ...s, [msgIdx]: 'saving…' }))
+    try {
+      const res = await fetch('/api/kb/chat/save-as-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setMsgActionState(s => ({ ...s, [msgIdx]: `saved → /kb/item/${data.kbItemId}` }))
+    } catch (err: any) {
+      setMsgActionState(s => ({ ...s, [msgIdx]: `save failed: ${err.message}` }))
+    }
+  }, [sessionId])
+
+  // ── Turn a specific assistant message into a ClickUp task ──────────────
+  const makeTask = useCallback(async (msgIdx: number, content: string) => {
+    setMsgActionState(s => ({ ...s, [msgIdx]: 'creating task…' }))
+    try {
+      const res = await fetch('/api/kb/chat/create-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, messageContent: content }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setMsgActionState(s => ({ ...s, [msgIdx]: `task → ${data.taskUrl}` }))
+    } catch (err: any) {
+      setMsgActionState(s => ({ ...s, [msgIdx]: `task failed: ${err.message}` }))
+    }
+  }, [sessionId])
 
   // ── Quick tool handlers ───────────────────────────────────────────────
   const handleTool = useCallback((tool: string) => {
@@ -228,7 +310,18 @@ export function KBChatAssistant() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={clearChat} className="kb-chief-header-btn" title="Clear conversation">
+            <a href="/chief-of-staff/history" className="kb-chief-header-btn" title="View chat history"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+              </svg>
+            </a>
+            <button onClick={newChat} className="kb-chief-header-btn" title="Start a new chat (saves current)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <button onClick={clearChat} className="kb-chief-header-btn" title="Clear messages (keeps session)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
               </svg>
@@ -306,6 +399,40 @@ export function KBChatAssistant() {
                   ? <p>{msg.content}</p>
                   : <div className="kb-chat-content">{renderMessageContent(msg.content)}</div>}
               </div>
+              {msg.role === 'assistant' && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, fontSize: 10 }}>
+                  <button
+                    onClick={() => saveAsNote(i)}
+                    className="kb-chat-source-tag"
+                    title="Save this conversation as a KB note"
+                    style={{ cursor: 'pointer', border: 'none' }}>
+                    💾 Save as KB note
+                  </button>
+                  <button
+                    onClick={() => makeTask(i, msg.content)}
+                    className="kb-chat-source-tag"
+                    title="Create a ClickUp task from this reply"
+                    style={{ cursor: 'pointer', border: 'none' }}>
+                    ✅ Make this a task
+                  </button>
+                  {msgActionState[i] && (
+                    <span style={{ fontSize: 10, color: '#9ca3af', alignSelf: 'center' }}>
+                      {msgActionState[i].startsWith('saved → ') ? (
+                        <a href={msgActionState[i].replace('saved → ', '')}
+                           className="text-amber-600 dark:text-amber-400 underline">
+                          ✓ Saved as KB note
+                        </a>
+                      ) : msgActionState[i].startsWith('task → ') ? (
+                        <a href={msgActionState[i].replace('task → ', '')}
+                           target="_blank" rel="noopener noreferrer"
+                           className="text-amber-600 dark:text-amber-400 underline">
+                          ✓ Task created — open in ClickUp
+                        </a>
+                      ) : msgActionState[i]}
+                    </span>
+                  )}
+                </div>
+              )}
               {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
                 <div className="kb-chat-sources">
                   <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9ca3af' }}>Sources</span>
