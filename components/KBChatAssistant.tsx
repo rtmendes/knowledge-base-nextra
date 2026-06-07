@@ -243,7 +243,13 @@ export function KBChatAssistant() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-      setMsgActionState(s => ({ ...s, [msgIdx]: `task → ${data.taskUrl}` }))
+      const routeLabel: Record<string, string> = {
+        blocked: '⏸️ Blocked', dispatch: '🔴 Needs Action',
+        prd: '📋 PRD Needed', digest: '📋 Digest Items',
+        override: '↳ overridden', forced: '↳ forced',
+      }
+      const tag = routeLabel[data.routedAs] || data.routedAs || ''
+      setMsgActionState(s => ({ ...s, [msgIdx]: `task|${data.taskUrl}|${tag}` }))
     } catch (err: any) {
       setMsgActionState(s => ({ ...s, [msgIdx]: `task failed: ${err.message}` }))
     }
@@ -422,13 +428,18 @@ export function KBChatAssistant() {
                            className="text-amber-600 dark:text-amber-400 underline">
                           ✓ Saved as KB note
                         </a>
-                      ) : msgActionState[i].startsWith('task → ') ? (
-                        <a href={msgActionState[i].replace('task → ', '')}
-                           target="_blank" rel="noopener noreferrer"
-                           className="text-amber-600 dark:text-amber-400 underline">
-                          ✓ Task created — open in ClickUp
-                        </a>
-                      ) : msgActionState[i]}
+                      ) : msgActionState[i].startsWith('task|') ? (() => {
+                        const [, url, tag] = msgActionState[i].split('|')
+                        return (
+                          <>
+                            <a href={url} target="_blank" rel="noopener noreferrer"
+                               className="text-amber-600 dark:text-amber-400 underline">
+                              ✓ Task created — open in ClickUp
+                            </a>
+                            {tag && <span style={{ marginLeft: 6, color: '#6b7280' }}>· {tag}</span>}
+                          </>
+                        )
+                      })() : msgActionState[i]}
                     </span>
                   )}
                 </div>
