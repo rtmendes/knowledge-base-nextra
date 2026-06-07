@@ -4,7 +4,16 @@ import { useState, useRef, useEffect, useCallback, type FormEvent } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-interface Source { id: string; title: string; item_type: string }
+interface Source {
+  id: string
+  title: string
+  item_type: string
+  /** Typed destination URL per source type — KB → /kb/item/{id}, app → live subdomain,
+   *  tool → login_page, task → ClickUp URL, etc. Falls back to '#' only if absent. */
+  url?: string
+  /** True for external destinations (open in new tab). */
+  external?: boolean
+}
 interface ChatMessage { role: 'user' | 'assistant'; content: string; sources?: Source[] }
 interface PageContext { title: string; url: string; itemId?: string }
 
@@ -301,11 +310,33 @@ export function KBChatAssistant() {
                 <div className="kb-chat-sources">
                   <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9ca3af' }}>Sources</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-                    {msg.sources.map((s, si) => (
-                      <a key={si} href={`/kb/item/${s.id}`} className="kb-chat-source-tag" title={s.title}>
-                        {s.title.length > 35 ? s.title.slice(0, 35) + '…' : s.title}
-                      </a>
-                    ))}
+                    {msg.sources.map((s, si) => {
+                      // Prefer the typed url from the API; fall back to legacy KB-item route
+                      // only when the source clearly IS a KB item (raw UUID-ish id, no prefix).
+                      const href = s.url
+                        || (s.item_type === 'kb_item' || !s.id.includes(':')
+                          ? `/kb/item/${s.id}`
+                          : '#')
+                      const isExternal = s.external ?? href.startsWith('http')
+                      const typeLabel: Record<string, string> = {
+                        app: '🌐', tool: '🔧', agent: '🤖', offer: '💰',
+                        task: '✅', credential: '🔑',
+                      }
+                      const icon = typeLabel[s.item_type] || '📄'
+                      return (
+                        <a
+                          key={si}
+                          href={href}
+                          target={isExternal ? '_blank' : undefined}
+                          rel={isExternal ? 'noopener noreferrer' : undefined}
+                          className="kb-chat-source-tag"
+                          title={`${s.item_type}: ${s.title}${isExternal ? ' (opens in new tab)' : ''}`}
+                        >
+                          <span style={{ marginRight: 4 }}>{icon}</span>
+                          {s.title.length > 35 ? s.title.slice(0, 35) + '…' : s.title}
+                        </a>
+                      )
+                    })}
                   </div>
                 </div>
               )}

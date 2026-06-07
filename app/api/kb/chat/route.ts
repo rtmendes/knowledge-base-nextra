@@ -60,11 +60,23 @@ function extractKeywords(message: string): string[] {
 }
 
 /**
- * Extract both PHRASES (multi-word entities like "Family Gift Studio") and
- * single TERMS from the query. Phrases are runs of consecutive non-stopword
- * tokens — these are the high-signal entity matches we want to prioritize.
+ * Extract DISTINCT ENTITY GROUPS from the query. A group is one consecutive run
+ * of non-stopword tokens — these represent semantically distinct concepts.
+ *
+ * "where are the design documents for family gift studio product images"
+ *   → group 0: ["design documents"]
+ *   → group 1: ["family gift studio", "gift studio product", "studio product images",
+ *               "family gift studio product images"]
+ *
+ * `phrases` is the flat list (back-compat for ILIKE conditions).
+ * `groups` is what we use for coverage scoring — an item that hits ≥2 groups
+ * addresses BOTH concepts and is more relevant than one hitting either alone.
  */
-function extractQuery(message: string): { phrases: string[]; terms: string[] } {
+function extractQuery(message: string): {
+  phrases: string[]
+  terms: string[]
+  groups: string[][]
+} {
   const raw = message
     .toLowerCase()
     .replace(/[^\w\s-]/g, ' ')
@@ -84,23 +96,24 @@ function extractQuery(message: string): { phrases: string[]; terms: string[] } {
   }
   if (run.length >= 2) runs.push(run)
 
-  // Keep phrases <= 4 words. For longer runs, break into 3-grams.
-  const phrases: string[] = []
-  for (const r of runs) {
-    if (r.length <= 4) {
-      phrases.push(r.join(' '))
-    } else {
-      for (let i = 0; i <= r.length - 3; i++) {
-        phrases.push(r.slice(i, i + 3).join(' '))
-      }
+  // For each run (= one concept), generate phrase variants.
+  // Short run → just the full phrase. Long run → full phrase + 3-grams (covers
+  // sub-entities like "Family Gift Studio" inside "Family Gift Studio product images").
+  const groups: string[][] = runs.map(r => {
+    if (r.length <= 4) return [r.join(' ')]
+    const variants: string[] = [r.join(' ')]
+    for (let i = 0; i <= r.length - 3; i++) {
+      variants.push(r.slice(i, i + 3).join(' '))
     }
-  }
+    return Array.from(new Set(variants))
+  })
+
+  const phrases = Array.from(new Set(groups.flat()))
+  // Prefer longest phrases first when slicing
+  phrases.sort((a, b) => b.split(' ').length - a.split(' ').length)
 
   const terms = raw.filter(w => w.length > 2 && !STOP_WORDS.has(w)).slice(0, 8)
-
-  // Cap phrases — prefer longest first (more specific entities)
-  phrases.sort((a, b) => b.split(' ').length - a.split(' ').length)
-  return { phrases: phrases.slice(0, 5), terms }
+  return { phrases: phrases.slice(0, 8), terms, groups }
 }
 
 /** Sanitize keyword for PostgREST ILIKE expressions (escape % and commas) */
@@ -116,36 +129,63 @@ function buildOr(columns: string[], keywords: string[]): string {
 }
 
 /**
- * Score an item by phrase hits (weighted heavily) and term hits.
- * Phrase matches are the strong signal — a doc that contains "family gift studio"
- * as a phrase is orders of magnitude more relevant than one that just mentions
- * "family" and "studio" somewhere independently.
+ * Score an item by:
+ *   - phraseHits: how many phrases matched (raw count, n-grams counted)
+ *   - groupsHit: how many DISTINCT entity groups matched (coverage signal)
+ *   - score: weighted sum + huge coverage bonus when groupsHit >= 2
+ *
+ * Coverage matters more than density for multi-concept queries. Doc hitting
+ * BOTH "family gift studio" AND "design documents" >> doc hitting only one.
  */
 function scoreItem(
   text: string,
   title: string,
   phrases: string[],
-  terms: string[]
-): { score: number; phraseHits: number } {
+  terms: string[],
+  groups: string[][] = [],
+): { score: number; phraseHits: number; groupsHit: number } {
   const t = title.toLowerCase()
   const c = text.toLowerCase()
   let score = 0
   let phraseHits = 0
 
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
   for (const p of phrases) {
-    const pre = new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    const pre = new RegExp(escape(p), 'g')
     const titleHits = (t.match(pre) || []).length
     const contentHits = Math.min((c.match(pre) || []).length, 5)
     if (titleHits > 0 || contentHits > 0) phraseHits++
     score += titleHits * 100
     score += contentHits * 25
   }
+
+  // Coverage: count distinct groups where ANY variant phrase matched
+  let groupsHit = 0
+  for (const group of groups) {
+    let hit = false
+    for (const variant of group) {
+      const re = new RegExp(escape(variant), 'g')
+      if (re.test(t) || re.test(c)) { hit = true; break }
+    }
+    if (hit) groupsHit++
+  }
+
+  // Bonuses by coverage — multi-group hits explode the score
+  if (groups.length >= 2 && groupsHit >= 2) {
+    // Item addresses MULTIPLE distinct concepts in the query — big boost
+    score += 500 * (groupsHit - 1)
+  } else if (groups.length >= 2 && groupsHit === 1) {
+    // Hits only one of multiple concepts — penalty for tangential match
+    score = Math.floor(score * 0.4)
+  }
+
   for (const kw of terms) {
-    const re = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    const re = new RegExp(escape(kw), 'g')
     score += (t.match(re) || []).length * 3
     score += Math.min((c.match(re) || []).length, 10)
   }
-  return { score, phraseHits }
+  return { score, phraseHits, groupsHit }
 }
 
 // ── Individual Table Searches ─────────────────────────────────────────────
@@ -165,7 +205,8 @@ const GENERIC_MIN_SCORE = 25
 async function searchKBItems(
   phrases: string[],
   terms: string[],
-  limit = 5
+  groups: string[][],
+  limit = 5,
 ): Promise<KBSearchResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
@@ -180,7 +221,7 @@ async function searchKBItems(
       .or(phraseConditions)
       .gt('word_count', 10)
       .order('word_count', { ascending: false })
-      .limit(limit * 3)
+      .limit(limit * 4)
     if (!res.error && res.data) data = res.data
   }
 
@@ -199,29 +240,42 @@ async function searchKBItems(
 
   if (data.length === 0) return []
 
-  // Score with phrase + term weighting
   const ranked = data.map(item => {
-    const { score, phraseHits } = scoreItem(
+    const { score, phraseHits, groupsHit } = scoreItem(
       item.content_plain || '',
       item.title || '',
       phrases,
       terms,
+      groups,
     )
     let finalScore = score
     if (item.word_count > 500) finalScore += 1
     if (item.word_count > 2000) finalScore += 1
-    return { ...item, score: finalScore, phraseHits }
+    return { ...item, score: finalScore, phraseHits, groupsHit }
   })
 
-  // Threshold: must score above KB_MIN_SCORE.
-  // If we have phrases, also require at least 1 phrase hit unless score is very high on terms alone.
+  // Coverage-aware filter:
+  //  - Multi-concept query (groups.length >= 2): require groupsHit >= 2
+  //    UNLESS the single-group score is extraordinarily high (title-level entity match).
+  //  - Single-concept query: standard threshold.
+  const multiGroup = groups.length >= 2
   const filtered = ranked.filter(r => {
     if (r.score < KB_MIN_SCORE) return false
+    if (multiGroup) {
+      if (r.groupsHit >= 2) return true
+      // Allow groupsHit=1 only if title-level entity match (score >= 200)
+      return r.score >= 200
+    }
+    // Single-concept query: phrase-or-strong-term gate
     if (phrases.length > 0 && r.phraseHits === 0 && r.score < KB_MIN_SCORE * 2) return false
     return true
   })
 
-  filtered.sort((a, b) => b.score - a.score)
+  // Rank by groupsHit first, then score
+  filtered.sort((a, b) => {
+    if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+    return b.score - a.score
+  })
 
   return filtered.slice(0, limit).map(item => ({
     id: item.id,
@@ -233,11 +287,10 @@ async function searchKBItems(
   }))
 }
 
-async function searchAppCatalog(phrases: string[], terms: string[]): Promise<AppResult[]> {
+async function searchAppCatalog(phrases: string[], terms: string[], groups: string[][]): Promise<AppResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
   try {
-    // Phrase pass first
     let data: any[] = []
     if (phrases.length > 0) {
       const res = await supabaseAdmin
@@ -257,16 +310,19 @@ async function searchAppCatalog(phrases: string[], terms: string[]): Promise<App
     }
     if (data.length === 0) return []
 
-    // Re-score and threshold — keep only relevant apps
     const ranked = data.map((r: any) => {
       const haystack = `${r.name || ''} ${r.subdomain || ''} ${r.description || r.purpose || r.notes || ''}`
-      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
-      return { row: r, score, phraseHits }
+      const { score, phraseHits, groupsHit } = scoreItem(haystack, r.name || '', phrases, terms, groups)
+      return { row: r, score, phraseHits, groupsHit }
     })
+    // Apps are entity-anchored — a name match alone is meaningful. Keep any phrase or group hit.
     const filtered = ranked.filter(x =>
-      x.score >= APP_MIN_SCORE || x.phraseHits > 0
+      x.score >= APP_MIN_SCORE || x.phraseHits > 0 || x.groupsHit > 0
     )
-    filtered.sort((a, b) => b.score - a.score)
+    filtered.sort((a, b) => {
+      if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+      return b.score - a.score
+    })
     return filtered.slice(0, 5).map(({ row: r }) => ({
       subdomain: r.subdomain,
       name: r.name,
@@ -276,7 +332,7 @@ async function searchAppCatalog(phrases: string[], terms: string[]): Promise<App
   } catch { return [] }
 }
 
-async function searchAiAgents(phrases: string[], terms: string[]): Promise<AgentResult[]> {
+async function searchAiAgents(phrases: string[], terms: string[], groups: string[][]): Promise<AgentResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
   try {
@@ -302,11 +358,14 @@ async function searchAiAgents(phrases: string[], terms: string[]): Promise<Agent
     const ranked = data.map((r: any) => {
       const meta = typeof r.metadata === 'string' ? r.metadata : JSON.stringify(r.metadata || {})
       const haystack = `${r.name || ''} ${r.platform || ''} ${meta}`
-      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
-      return { row: r, score, phraseHits, meta }
+      const { score, phraseHits, groupsHit } = scoreItem(haystack, r.name || '', phrases, terms, groups)
+      return { row: r, score, phraseHits, groupsHit, meta }
     })
-    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
-    filtered.sort((a, b) => b.score - a.score)
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0 || x.groupsHit > 0)
+    filtered.sort((a, b) => {
+      if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+      return b.score - a.score
+    })
     return filtered.slice(0, 5).map(({ row: r, meta }) => ({
       name: r.name,
       status: r.status,
@@ -316,7 +375,7 @@ async function searchAiAgents(phrases: string[], terms: string[]): Promise<Agent
   } catch { return [] }
 }
 
-async function searchTechTools(phrases: string[], terms: string[]): Promise<ToolResult[]> {
+async function searchTechTools(phrases: string[], terms: string[], groups: string[][]): Promise<ToolResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
   try {
@@ -341,11 +400,14 @@ async function searchTechTools(phrases: string[], terms: string[]): Promise<Tool
 
     const ranked = data.map((r: any) => {
       const haystack = `${r.tool_name || ''} ${r.function_description || ''}`
-      const { score, phraseHits } = scoreItem(haystack, r.tool_name || '', phrases, terms)
-      return { row: r, score, phraseHits }
+      const { score, phraseHits, groupsHit } = scoreItem(haystack, r.tool_name || '', phrases, terms, groups)
+      return { row: r, score, phraseHits, groupsHit }
     })
-    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
-    filtered.sort((a, b) => b.score - a.score)
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0 || x.groupsHit > 0)
+    filtered.sort((a, b) => {
+      if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+      return b.score - a.score
+    })
     return filtered.slice(0, 5).map(({ row: r }) => ({
       tool_name: r.tool_name,
       function_description: r.function_description,
@@ -354,7 +416,7 @@ async function searchTechTools(phrases: string[], terms: string[]): Promise<Tool
   } catch { return [] }
 }
 
-async function searchOfferPipeline(phrases: string[], terms: string[]): Promise<OfferResult[]> {
+async function searchOfferPipeline(phrases: string[], terms: string[], groups: string[][]): Promise<OfferResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
   try {
@@ -386,11 +448,14 @@ async function searchOfferPipeline(phrases: string[], terms: string[]): Promise<
 
     const ranked = data.map((r: any) => {
       const haystack = `${r.name || ''} ${r.description || r.notes || ''} ${r.offer_type || ''}`
-      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
-      return { row: r, score, phraseHits }
+      const { score, phraseHits, groupsHit } = scoreItem(haystack, r.name || '', phrases, terms, groups)
+      return { row: r, score, phraseHits, groupsHit }
     })
-    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
-    filtered.sort((a, b) => b.score - a.score)
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0 || x.groupsHit > 0)
+    filtered.sort((a, b) => {
+      if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+      return b.score - a.score
+    })
     return filtered.slice(0, 5).map(({ row: r }) => ({
       name: r.name,
       description: r.description || r.notes,
@@ -400,7 +465,7 @@ async function searchOfferPipeline(phrases: string[], terms: string[]): Promise<
   } catch { return [] }
 }
 
-async function searchClickupTasks(phrases: string[], terms: string[]): Promise<TaskResult[]> {
+async function searchClickupTasks(phrases: string[], terms: string[], groups: string[][]): Promise<TaskResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
   try {
@@ -430,11 +495,14 @@ async function searchClickupTasks(phrases: string[], terms: string[]): Promise<T
 
     const ranked = data.map((r: any) => {
       const haystack = `${r.name || ''} ${r.text_content || r.description || ''}`
-      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
-      return { row: r, score, phraseHits }
+      const { score, phraseHits, groupsHit } = scoreItem(haystack, r.name || '', phrases, terms, groups)
+      return { row: r, score, phraseHits, groupsHit }
     })
-    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
-    filtered.sort((a, b) => b.score - a.score)
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0 || x.groupsHit > 0)
+    filtered.sort((a, b) => {
+      if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+      return b.score - a.score
+    })
     return filtered.slice(0, 5).map(({ row: r }) => ({
       id: r.id || r.task_id,
       name: r.name,
@@ -445,7 +513,7 @@ async function searchClickupTasks(phrases: string[], terms: string[]): Promise<T
   } catch { return [] }
 }
 
-async function searchCredentials(phrases: string[], terms: string[]): Promise<CredentialResult[]> {
+async function searchCredentials(phrases: string[], terms: string[], groups: string[][]): Promise<CredentialResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
   try {
@@ -470,11 +538,14 @@ async function searchCredentials(phrases: string[], terms: string[]): Promise<Cr
     if (data.length === 0) return []
 
     const ranked = data.map((r: any) => {
-      const { score, phraseHits } = scoreItem(r.service || '', r.service || '', phrases, terms)
-      return { row: r, score, phraseHits }
+      const { score, phraseHits, groupsHit } = scoreItem(r.service || '', r.service || '', phrases, terms, groups)
+      return { row: r, score, phraseHits, groupsHit }
     })
-    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
-    filtered.sort((a, b) => b.score - a.score)
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0 || x.groupsHit > 0)
+    filtered.sort((a, b) => {
+      if (b.groupsHit !== a.groupsHit) return b.groupsHit - a.groupsHit
+      return b.score - a.score
+    })
     return filtered.slice(0, 5).map(({ row: r }) => r as CredentialResult)
   } catch { return [] }
 }
@@ -484,28 +555,29 @@ async function federatedSearch(query: string): Promise<{
   context: FederatedContext
   phrases: string[]
   terms: string[]
+  groups: string[][]
 }> {
-  const { phrases, terms } = extractQuery(query)
+  const { phrases, terms, groups } = extractQuery(query)
   if (phrases.length === 0 && terms.length === 0) {
     return {
       context: { kbItems: [], apps: [], agents: [], tools: [], offers: [], tasks: [], credentials: [] },
-      phrases, terms,
+      phrases, terms, groups,
     }
   }
 
   const [kbItems, apps, agents, tools, offers, tasks, credentials] = await Promise.all([
-    searchKBItems(phrases, terms),
-    searchAppCatalog(phrases, terms),
-    searchAiAgents(phrases, terms),
-    searchTechTools(phrases, terms),
-    searchOfferPipeline(phrases, terms),
-    searchClickupTasks(phrases, terms),
-    searchCredentials(phrases, terms),
+    searchKBItems(phrases, terms, groups),
+    searchAppCatalog(phrases, terms, groups),
+    searchAiAgents(phrases, terms, groups),
+    searchTechTools(phrases, terms, groups),
+    searchOfferPipeline(phrases, terms, groups),
+    searchClickupTasks(phrases, terms, groups),
+    searchCredentials(phrases, terms, groups),
   ])
 
   return {
     context: { kbItems, apps, agents, tools, offers, tasks, credentials },
-    phrases, terms,
+    phrases, terms, groups,
   }
 }
 
@@ -709,19 +781,72 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
 
-    // Build a unified `sources` array for the UI from all federated hits
-    const sourcesPayload: Array<{ id: string; title: string; item_type: string }> = [
-      ...ctx.kbItems.map(r => ({ id: r.id, title: r.title, item_type: r.item_type })),
+    // Build a unified `sources` array for the UI from all federated hits.
+    // Each source has a typed `url` so the widget renders a clickable pill that
+    // routes to the RIGHT destination per source type:
+    //   - KB items  → /kb/item/{id}            (internal Nextra page)
+    //   - apps      → https://{subdomain}.insightprofit.live
+    //   - tools     → tool.login_page (external app login)
+    //   - tasks     → task.url (ClickUp task page)
+    //   - agents    → /kb/agents?q={name}      (agents directory filter)
+    //   - offers    → /kb/offers?q={name}
+    //   - creds     → /kb/credentials?q={service}
+    const sourcesPayload: Array<{
+      id: string
+      title: string
+      item_type: string
+      url: string
+      external: boolean
+    }> = [
+      ...ctx.kbItems.map(r => ({
+        id: r.id,
+        title: r.title,
+        item_type: r.item_type,
+        url: `/kb/item/${r.id}`,
+        external: false,
+      })),
       ...ctx.apps.map(a => ({
         id: `app:${a.subdomain}`,
         title: `${a.name} (${a.subdomain}.insightprofit.live)`,
         item_type: 'app',
+        url: a.subdomain ? `https://${a.subdomain}.insightprofit.live` : '#',
+        external: true,
       })),
-      ...ctx.agents.map(a => ({ id: `agent:${a.name}`, title: a.name, item_type: 'agent' })),
-      ...ctx.tools.map(t => ({ id: `tool:${t.tool_name}`, title: t.tool_name, item_type: 'tool' })),
-      ...ctx.offers.map(o => ({ id: `offer:${o.name || 'unknown'}`, title: o.name || 'Offer', item_type: 'offer' })),
-      ...ctx.tasks.map(t => ({ id: `task:${t.id || t.name}`, title: t.name || 'Task', item_type: 'task' })),
-      ...ctx.credentials.map(c => ({ id: `cred:${c.service}`, title: c.service, item_type: 'credential' })),
+      ...ctx.agents.map(a => ({
+        id: `agent:${a.name}`,
+        title: a.name,
+        item_type: 'agent',
+        url: `/kb/agents?q=${encodeURIComponent(a.name)}`,
+        external: false,
+      })),
+      ...ctx.tools.map(t => ({
+        id: `tool:${t.tool_name}`,
+        title: t.tool_name,
+        item_type: 'tool',
+        url: t.login_page || `/kb/tools?q=${encodeURIComponent(t.tool_name)}`,
+        external: !!t.login_page,
+      })),
+      ...ctx.offers.map(o => ({
+        id: `offer:${o.name || 'unknown'}`,
+        title: o.name || 'Offer',
+        item_type: 'offer',
+        url: `/kb/offers?q=${encodeURIComponent(o.name || '')}`,
+        external: false,
+      })),
+      ...ctx.tasks.map(t => ({
+        id: `task:${t.id || t.name}`,
+        title: t.name || 'Task',
+        item_type: 'task',
+        url: t.url || `/kb/tasks?q=${encodeURIComponent(t.name || '')}`,
+        external: !!t.url,
+      })),
+      ...ctx.credentials.map(c => ({
+        id: `cred:${c.service}`,
+        title: c.service,
+        item_type: 'credential',
+        url: `/kb/credentials?q=${encodeURIComponent(c.service)}`,
+        external: false,
+      })),
     ]
 
     const stream = new ReadableStream({
