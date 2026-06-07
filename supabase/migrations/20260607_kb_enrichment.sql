@@ -24,13 +24,15 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'knowledge_items' AND column_name = 'search_doc'
   ) THEN
+    -- tags is jsonb in this DB; cast to text so tokens (e.g. "github", "fgs")
+    -- get indexed even though the raw representation has [] and "" around them.
     EXECUTE $sql$
       ALTER TABLE knowledge_items
       ADD COLUMN search_doc tsvector
       GENERATED ALWAYS AS (
         setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
         setweight(to_tsvector('english', coalesce(brand, '')), 'A') ||
-        setweight(to_tsvector('english', coalesce(array_to_string(tags, ' '), '')), 'B') ||
+        setweight(to_tsvector('english', coalesce(tags::text, '')), 'B') ||
         setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
         setweight(to_tsvector('english', coalesce(content_plain, '')), 'C')
       ) STORED
@@ -110,7 +112,7 @@ RETURNS TABLE (
   title text,
   item_type text,
   content_plain text,
-  tags text[],
+  tags jsonb,
   word_count int,
   brand text,
   summary text,

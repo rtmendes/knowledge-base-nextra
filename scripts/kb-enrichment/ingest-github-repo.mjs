@@ -30,6 +30,8 @@ config({ path: join(repoRoot, '.env.local') })
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
 const GH_TOKEN     = process.env.GITHUB_TOKEN  // optional, raises rate limit
+// Dominant existing user owns these external refs (required: knowledge_items.user_id NOT NULL)
+const OWNER_USER_ID = process.env.KB_INGEST_USER_ID || '893ac9b3-d3f8-4809-ab8e-0e2ad12bc0d0'
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('Missing Supabase env vars in .env.local')
@@ -109,6 +111,7 @@ for (const node of targets) {
   const word_count = plain.split(/\s+/).filter(Boolean).length
 
   const row = {
+    user_id: OWNER_USER_ID,
     title,
     content: content.slice(0, 50000),
     content_plain: plain.slice(0, 50000),
@@ -117,15 +120,26 @@ for (const node of targets) {
     word_count,
     brand,
     summary,
+    status: 'active',
   }
 
-  // Upsert by title (unique-ish for external refs)
-  const { error } = await supabase
+  // No unique constraint on title → select-then-update-or-insert.
+  const { data: existing } = await supabase
     .from('knowledge_items')
-    .upsert(row, { onConflict: 'title' })
+    .select('id')
+    .eq('title', title)
+    .limit(1)
+    .maybeSingle()
+
+  let error
+  if (existing) {
+    ({ error } = await supabase.from('knowledge_items').update(row).eq('id', existing.id))
+  } else {
+    ({ error } = await supabase.from('knowledge_items').insert(row))
+  }
 
   if (error) console.error(`  fail ${node.path}:`, error.message)
-  else { count++; console.log(`  ✓ ${node.path} (${word_count} words)`) }
+  else { count++; console.log(`  ${existing ? '↻' : '✓'} ${node.path} (${word_count} words)`) }
 }
 
 console.log(`\n✅ Ingested ${count} doc(s) from ${owner}/${name}`)
