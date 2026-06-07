@@ -121,6 +121,83 @@ function safeKw(kw: string): string {
   return kw.replace(/[%,()]/g, ' ').trim()
 }
 
+/**
+ * Look up entities in kb_entities whose canonical OR aliases match any token
+ * in the query, returning canonical names + their full alias lists. The route
+ * then injects these as additional phrases — "fgs design docs" gets expanded
+ * to also search for "Family Gift Studio".
+ *
+ * Falls back silently to [] if the table doesn't exist yet (pre-migration).
+ *
+ * @param terms Single-token lower-case keywords from the query
+ * @returns Flat list of canonical names + aliases for matched entities
+ */
+async function expandEntities(
+  terms: string[],
+  phrases: string[],
+): Promise<{ canonicals: string[]; expanded: string[]; matched: Array<{ canonical: string; description?: string }> }> {
+  if (!supabaseAdmin) return { canonicals: [], expanded: [], matched: [] }
+  if (terms.length === 0 && phrases.length === 0) return { canonicals: [], expanded: [], matched: [] }
+
+  try {
+    // Match by alias overlap OR canonical ILIKE on any phrase/term.
+    // Two passes — array overlap (fast, indexed) then phrase ILIKE.
+    const aliasMatches = await supabaseAdmin
+      .from('kb_entities')
+      .select('canonical, aliases, description, authority_score')
+      .overlaps('aliases', terms)
+      .order('authority_score', { ascending: false })
+      .limit(8)
+
+    let canonicalMatches: any = { data: [], error: null }
+    if (phrases.length > 0) {
+      const phraseConditions = phrases
+        .map(p => `canonical.ilike.%${safeKw(p)}%`)
+        .join(',')
+      canonicalMatches = await supabaseAdmin
+        .from('kb_entities')
+        .select('canonical, aliases, description, authority_score')
+        .or(phraseConditions)
+        .order('authority_score', { ascending: false })
+        .limit(8)
+    }
+
+    const rows = [
+      ...(aliasMatches.data || []),
+      ...(canonicalMatches.data || []),
+    ]
+    if (rows.length === 0) return { canonicals: [], expanded: [], matched: [] }
+
+    // Dedupe by canonical
+    const byCanon = new Map<string, { canonical: string; aliases: string[]; description?: string }>()
+    for (const r of rows) {
+      if (!byCanon.has(r.canonical)) {
+        byCanon.set(r.canonical, {
+          canonical: r.canonical,
+          aliases: r.aliases || [],
+          description: r.description,
+        })
+      }
+    }
+
+    const canonicals = Array.from(byCanon.keys())
+    const expanded = Array.from(
+      new Set(
+        Array.from(byCanon.values()).flatMap(e => [e.canonical, ...e.aliases]),
+      ),
+    )
+    const matched = Array.from(byCanon.values()).map(e => ({
+      canonical: e.canonical,
+      description: e.description,
+    }))
+
+    return { canonicals, expanded, matched }
+  } catch (err) {
+    // kb_entities table may not exist yet (pre-migration). Silent fallback.
+    return { canonicals: [], expanded: [], matched: [] }
+  }
+}
+
 /** Build PostgREST `.or()` condition string for given columns + keywords */
 function buildOr(columns: string[], keywords: string[]): string {
   return keywords
@@ -211,9 +288,29 @@ async function searchKBItems(
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
 
-  // Phrase pass — ILIKE the full phrase against title + content_plain
+  // Fast path: Postgres FTS via search_knowledge_items_fts RPC.
+  // Falls back to ILIKE if the RPC doesn't exist yet (pre-migration).
   let data: any[] = []
-  if (phrases.length > 0) {
+  try {
+    // Build a tsquery-friendly string. websearch_to_tsquery handles natural
+    // English so we just join the longest phrases with " OR " for recall —
+    // ranking still favors items that hit multiple terms via ts_rank_cd.
+    const ftsQuery = phrases.length > 0
+      ? phrases.slice(0, 5).map(p => `"${p.replace(/"/g, '')}"`).join(' OR ')
+      : terms.slice(0, 5).join(' OR ')
+
+    const res = await supabaseAdmin.rpc('search_knowledge_items_fts', {
+      q: ftsQuery,
+      brand_filter: null,
+      limit_n: limit * 4,
+    })
+    if (!res.error && res.data) data = res.data
+  } catch {
+    // RPC missing — fall through to ILIKE path
+  }
+
+  // ILIKE fallback (works pre-migration too) — Phrase pass first
+  if (data.length === 0 && phrases.length > 0) {
     const phraseConditions = buildOr(['title', 'content_plain'], phrases)
     const res = await supabaseAdmin
       .from('knowledge_items')
@@ -225,7 +322,7 @@ async function searchKBItems(
     if (!res.error && res.data) data = res.data
   }
 
-  // Fallback term pass only if no phrase hits
+  // Fallback term pass only if both fast path AND phrase ILIKE returned nothing
   if (data.length === 0 && terms.length > 0) {
     const termConditions = buildOr(['title', 'content_plain'], terms)
     const res = await supabaseAdmin
@@ -550,36 +647,136 @@ async function searchCredentials(phrases: string[], terms: string[], groups: str
   } catch { return [] }
 }
 
-/** Federated search across the enterprise platform */
+/** Federated search across the enterprise platform.
+ *
+ * Two-step pipeline:
+ *   1. Entity expansion — look up kb_entities for query tokens. "fgs" matches
+ *      the alias list of Family Gift Studio and expands the search to include
+ *      its canonical name + every other known alias.
+ *   2. Federated search — run searches across all 7 tables with the expanded
+ *      phrase set. Pass groups through for coverage scoring.
+ */
 async function federatedSearch(query: string): Promise<{
   context: FederatedContext
   phrases: string[]
   terms: string[]
   groups: string[][]
+  matchedEntities: Array<{ canonical: string; description?: string }>
 }> {
   const { phrases, terms, groups } = extractQuery(query)
   if (phrases.length === 0 && terms.length === 0) {
     return {
       context: { kbItems: [], apps: [], agents: [], tools: [], offers: [], tasks: [], credentials: [] },
-      phrases, terms, groups,
+      phrases, terms, groups, matchedEntities: [],
     }
   }
 
+  // Step 1: entity expansion via kb_entities
+  const { expanded, matched } = await expandEntities(terms, phrases)
+
+  // Add expanded canonicals/aliases as a NEW group (so coverage scoring still
+  // works) AND prepend them to phrases (so ILIKE+FTS see them). Cap total
+  // phrases at 12 to keep PostgREST OR clauses reasonable.
+  const enrichedPhrases = Array.from(new Set([...expanded, ...phrases])).slice(0, 12)
+  const enrichedGroups: string[][] = expanded.length > 0
+    ? [...groups, expanded.slice(0, 6)]
+    : groups
+
+  // Step 2: federated search
   const [kbItems, apps, agents, tools, offers, tasks, credentials] = await Promise.all([
-    searchKBItems(phrases, terms, groups),
-    searchAppCatalog(phrases, terms, groups),
-    searchAiAgents(phrases, terms, groups),
-    searchTechTools(phrases, terms, groups),
-    searchOfferPipeline(phrases, terms, groups),
-    searchClickupTasks(phrases, terms, groups),
-    searchCredentials(phrases, terms, groups),
+    searchKBItems(enrichedPhrases, terms, enrichedGroups),
+    searchAppCatalog(enrichedPhrases, terms, enrichedGroups),
+    searchAiAgents(enrichedPhrases, terms, enrichedGroups),
+    searchTechTools(enrichedPhrases, terms, enrichedGroups),
+    searchOfferPipeline(enrichedPhrases, terms, enrichedGroups),
+    searchClickupTasks(enrichedPhrases, terms, enrichedGroups),
+    searchCredentials(enrichedPhrases, terms, enrichedGroups),
   ])
 
   return {
     context: { kbItems, apps, agents, tools, offers, tasks, credentials },
-    phrases, terms, groups,
+    phrases: enrichedPhrases,
+    terms,
+    groups: enrichedGroups,
+    matchedEntities: matched,
   }
 }
+
+// ── Static Enterprise Ecosystem Context ───────────────────────────────────
+//
+// This block is injected into EVERY Chief of Staff turn as ground-truth
+// knowledge of the InsightProfit ecosystem. Even if federated search returns
+// nothing, the agent still knows:
+//   - which 28 apps exist + where they live
+//   - which repos are DEAD (must not be referenced)
+//   - which Supabase tables exist + their exact column names
+//   - which subdomains map to which functions
+//
+// Single source of truth: this mirrors knowledge-base-nextra/CLAUDE.md so the
+// agent's "innate knowledge" of the company never drifts from the deployment
+// map developers actually follow.
+const ENTERPRISE_ECOSYSTEM = `
+## InsightProfit Enterprise Map (28 production apps)
+
+All apps deploy to subdomains of \`insightprofit.live\` from their respective
+repos via Vercel. Apps are accessible without auth walls.
+
+### Apps & Subdomains
+- **Apex** — apex.insightprofit.live (repo: apex-deploy) — flagship growth platform
+- **CloseFlow** — closeflow.insightprofit.live (repo: closeflow) — sales close + ops workflow
+- **Customer Intelligence** — intel.insightprofit.live (repo: customer-intelligence-engine) — CI/research dashboard
+- **Delta Jobs CRM** — jobs.insightprofit.live (repo: delta-jobs-crm) — recruiting / job pipeline
+- **Design Inspiration** — design.insightprofit.live (repo: design-inspiration-curator) — design boards + curation
+- **Digest HQ** — digest.insightprofit.live (repo: digest-hq) — daily content digest engine
+- **EliteWriter** — elite-writer-app.insightprofit.live (repo: elite-writer-app) — long-form AI writing
+- **Family Gift Studio (FGS)** — fgs.insightprofit.live (repo: fgs-product-suite) — POD/ecom brand for gifts; one of the active product lines
+- **InsightProfit Academy** — academy.insightprofit.live (repo: insightprofit-academy) — training/courseware
+- **Command Center v2** — command.insightprofit.live (repo: insightprofit-command-v2) — central ops hub; ALWAYS use v2, not v1
+- **Creative** — creative.insightprofit.live (repo: insightprofit-creative) — creative asset workspace
+- **Ecom** — ecom.insightprofit.live (repo: insightprofit-ecom) — ecommerce engine
+- **Email Ops** — email.insightprofit.live (repo: insightprofit-emailops) — email marketing + dunning + lifecycle
+- **Growth/Strategy** — strategy.insightprofit.live (repo: insightprofit-growth) — strategy docs/dashboards
+- **Hub** — hub.insightprofit.live (repo: insightprofit-hub) — internal directory
+- **Offers** — offers.insightprofit.live (repo: insightprofit-offers) — offer marketplace
+- **Services** — services.insightprofit.live (repo: insightprofit-services) — service catalog
+- **Knowledge Base** — kb.insightprofit.live (repo: knowledge-base-nextra) — THIS PROPERTY; Nextra docs + Chief of Staff
+- **Offer Stack Engine** — offers.fundedfirst.com (repo: offer-stack-engine) — FundedFirst-branded offer stack
+- **Product Board** — products.insightprofit.live (repo: product-board) — product roadmap
+- **Research Platform** — research.insightprofit.live (repo: research-platform) — research workspace
+- **Revenue Engine** — revenue.insightprofit.live (repo: revenue-engine) — revenue analytics
+- **Second Spring** — secondspring.insightprofit.live (repo: second-spring-platform) — Second Spring product
+- **Social Intelligence** — social.insightprofit.live (repo: social-intelligence-engine) — social listening
+- **Sparky Studio** — sparky.insightprofit.live (repo: sparky-studio) — creative tooling
+- **Tyber Sync** — tyber.insightprofit.live (repo: tyber-sync) — Tyber integration
+- **VidRevamp** — vidrevamp.insightprofit.live (repo: vidrevamp) — video repurposing
+
+### DEAD REPOS — never reference, never suggest (use successors)
+- \`insightprofit-command\` (v1) → use **insightprofit-command-v2**
+- \`insightprofit-kb\` → use **knowledge-base-nextra**
+- \`offer-engine\` → use **insightprofit-offers** OR **offer-stack-engine**
+- \`insightprofit-command-center\`, \`insightprofit-mission-control\` → use **insightprofit-command-v2**
+- \`insight-profit-kb\` → use **knowledge-base-nextra**
+
+### Supabase Schema (self-hosted at supabase.insightprofit.live)
+Exact column names — if you cite a column not in this list, you are HALLUCINATING:
+- **knowledge_items**: id, title, content, content_plain, item_type, tags, word_count
+- **app_catalog**: subdomain, name, hosting (NO department)
+- **ai_agents**: name, status, platform, metadata (NO entry_type, type, department)
+- **tech_tools**: tool_name, function_description, login_page (NO name/description/url)
+- **credential_registry**: service, deployed_locations (text[])
+- **ai_expense_log**: provider, cost_usd, model (total_tokens is GENERATED — cannot insert)
+- **clickup_tasks**: id, name, text_content, status, url (NO status_name, NO created_at)
+- **offer_pipeline**: name, description, price_point (TEXT, not numeric)
+
+### Active Product Lines (brands inside InsightProfit)
+- Family Gift Studio (FGS) — print-on-demand gifting, jewelry bundles, lifestyle imagery
+- Apex — growth platform
+- EliteWriter — AI writing SaaS
+- VidRevamp — video repurposing SaaS
+- Second Spring — life transition product
+- FundedFirst — offer stack (lives at offers.fundedfirst.com)
+- SKYWARD OS — Rashida's command OS
+`
 
 // ── Prompt Builder ────────────────────────────────────────────────────────
 
@@ -593,6 +790,7 @@ function buildSystemPrompt(
   ctx: FederatedContext,
   phrases: string[],
   terms: string[],
+  matchedEntities: Array<{ canonical: string; description?: string }>,
   pageContext?: PageContext,
 ): string {
   const blocks: string[] = []
@@ -600,7 +798,15 @@ function buildSystemPrompt(
     ctx.kbItems.length + ctx.apps.length + ctx.agents.length +
     ctx.tools.length + ctx.offers.length + ctx.tasks.length + ctx.credentials.length
 
-  const queryDebug = `\n## Query Analysis\n- Detected phrases: ${phrases.length ? phrases.map(p => `"${p}"`).join(', ') : '(none)'}\n- Single terms: ${terms.length ? terms.join(', ') : '(none)'}\n- Total qualified matches across enterprise tables: ${totalHits}\n`
+  const entityBlock = matchedEntities.length > 0
+    ? `\n## Matched Enterprise Entities (from kb_entities dictionary)\n` +
+      matchedEntities.map(e =>
+        `- **${e.canonical}**${e.description ? ` — ${e.description}` : ''}`,
+      ).join('\n') + '\n' +
+      `\nUse these as canonical references when answering. If a user asked using an alias (e.g. "fgs"), respond using the canonical name (e.g. "Family Gift Studio") and mention the alias in passing if helpful.\n`
+    : ''
+
+  const queryDebug = `\n## Query Analysis\n- Detected phrases: ${phrases.length ? phrases.map(p => `"${p}"`).join(', ') : '(none)'}\n- Single terms: ${terms.length ? terms.join(', ') : '(none)'}\n- Matched entities: ${matchedEntities.length ? matchedEntities.map(e => e.canonical).join(', ') : '(none)'}\n- Total qualified matches across enterprise tables: ${totalHits}\n${entityBlock}`
 
   if (ctx.kbItems.length > 0) {
     let b = '\n## Relevant Knowledge Base Items\n\n'
@@ -694,22 +900,28 @@ When asked to summarize, edit, or improve "this page", refer to the above contex
 - You bridge KB knowledge to the broader InsightProfit tool suite and live apps.
 - You are proactive: suggest next steps, identify gaps, and connect related information across data sources.
 
+## Innate Enterprise Knowledge (always true, regardless of search results)
+${ENTERPRISE_ECOSYSTEM}
+
 ## Enterprise Data Sources Available (this turn)
-The blocks below are the result of a federated keyword search across the live Supabase enterprise data. Treat them as the authoritative current state.
+The blocks below are the result of a federated keyword search across the live Supabase enterprise data. Treat them as the authoritative current state. Pair them with the Innate Enterprise Knowledge above when answering.
 ${pageBlock}${contextBlock}
 
 ## Response Format
 - Use clear markdown: headers, bullet points, bold for key terms.
 - Cite KB items as [Title](/kb/item/ID) — always link, never just mention.
-- When referencing an app, link its live subdomain (e.g. https://family-gift-studio.insightprofit.live if found in app_catalog).
+- When referencing an app, link its live subdomain from the Innate Enterprise Map (e.g. https://fgs.insightprofit.live for Family Gift Studio).
 - When referencing a tool, link its login_page when known.
 - End with a concrete "Next Steps" or suggested action when appropriate.
 
 ## Instructions
 - Prioritize the enterprise data blocks above when answering — they are this turn's ground truth.
-- If the user asks "where are the design documents for X", check: KB items → app catalog → offer pipeline → tasks, in that order, and report what you find in each.
-- If NO blocks contain matches, say so honestly and suggest: (a) different search terms, (b) which database tables likely hold the answer, (c) a Command Center / ClickUp action to capture the gap.
+- If the user asks "where are the design documents for X" where X is a known brand from the Innate Enterprise Map: name the app, give its live subdomain, AND check KB / catalog / tasks for design docs. Don't reply with only one of those.
+- If NO search blocks contain matches BUT the query mentions a known brand or app (from the Innate Enterprise Map): use that map to give the user the live URL, repo name, and what category the asset would live under — then suggest a more specific search term.
+- If NO blocks contain matches AND nothing matches the Innate Enterprise Map: say so honestly and suggest (a) different search terms, (b) which database tables likely hold the answer, (c) a Command Center / ClickUp action to capture the gap.
 - For cross-app actions (ClickUp tasks, Command Center items), format them as copy-pasteable bullets the user can act on.
+- NEVER reference a DEAD REPO. If the user mentions one, redirect them to the successor.
+- NEVER fabricate columns or table names — use only those in the Supabase Schema above.
 - Never fabricate — if a data source is empty, say so.`
 }
 
@@ -743,10 +955,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Federated enterprise search (phrase-first, threshold-filtered)
-    const { context: ctx, phrases, terms } = await federatedSearch(lastUserMessage.content)
+    // Federated enterprise search (entity-expanded, phrase-first, coverage-scored)
+    const { context: ctx, phrases, terms, matchedEntities } =
+      await federatedSearch(lastUserMessage.content)
 
-    const systemPrompt = buildSystemPrompt(ctx, phrases, terms, pageContext)
+    const systemPrompt = buildSystemPrompt(ctx, phrases, terms, matchedEntities, pageContext)
     const fullMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages.slice(-10),
