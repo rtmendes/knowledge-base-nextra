@@ -59,6 +59,50 @@ function extractKeywords(message: string): string[] {
     .slice(0, 8)
 }
 
+/**
+ * Extract both PHRASES (multi-word entities like "Family Gift Studio") and
+ * single TERMS from the query. Phrases are runs of consecutive non-stopword
+ * tokens — these are the high-signal entity matches we want to prioritize.
+ */
+function extractQuery(message: string): { phrases: string[]; terms: string[] } {
+  const raw = message
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+
+  // Find runs of consecutive non-stopword, length>2 tokens
+  const runs: string[][] = []
+  let run: string[] = []
+  for (const w of raw) {
+    if (STOP_WORDS.has(w) || w.length <= 2) {
+      if (run.length >= 2) runs.push(run)
+      run = []
+    } else {
+      run.push(w)
+    }
+  }
+  if (run.length >= 2) runs.push(run)
+
+  // Keep phrases <= 4 words. For longer runs, break into 3-grams.
+  const phrases: string[] = []
+  for (const r of runs) {
+    if (r.length <= 4) {
+      phrases.push(r.join(' '))
+    } else {
+      for (let i = 0; i <= r.length - 3; i++) {
+        phrases.push(r.slice(i, i + 3).join(' '))
+      }
+    }
+  }
+
+  const terms = raw.filter(w => w.length > 2 && !STOP_WORDS.has(w)).slice(0, 8)
+
+  // Cap phrases — prefer longest first (more specific entities)
+  phrases.sort((a, b) => b.split(' ').length - a.split(' ').length)
+  return { phrases: phrases.slice(0, 5), terms }
+}
+
 /** Sanitize keyword for PostgREST ILIKE expressions (escape % and commas) */
 function safeKw(kw: string): string {
   return kw.replace(/[%,()]/g, ' ').trim()
@@ -71,39 +115,115 @@ function buildOr(columns: string[], keywords: string[]): string {
     .join(',')
 }
 
+/**
+ * Score an item by phrase hits (weighted heavily) and term hits.
+ * Phrase matches are the strong signal — a doc that contains "family gift studio"
+ * as a phrase is orders of magnitude more relevant than one that just mentions
+ * "family" and "studio" somewhere independently.
+ */
+function scoreItem(
+  text: string,
+  title: string,
+  phrases: string[],
+  terms: string[]
+): { score: number; phraseHits: number } {
+  const t = title.toLowerCase()
+  const c = text.toLowerCase()
+  let score = 0
+  let phraseHits = 0
+
+  for (const p of phrases) {
+    const pre = new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    const titleHits = (t.match(pre) || []).length
+    const contentHits = Math.min((c.match(pre) || []).length, 5)
+    if (titleHits > 0 || contentHits > 0) phraseHits++
+    score += titleHits * 100
+    score += contentHits * 25
+  }
+  for (const kw of terms) {
+    const re = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    score += (t.match(re) || []).length * 3
+    score += Math.min((c.match(re) || []).length, 10)
+  }
+  return { score, phraseHits }
+}
+
 // ── Individual Table Searches ─────────────────────────────────────────────
+//
+// Search strategy per table:
+//   1. PHRASE PASS — try the longest phrases as ILIKE substring matches first.
+//      These are high-signal entity matches ("family gift studio").
+//   2. TERM FALLBACK — only if phrase pass returns nothing, fall back to
+//      single-keyword OR.
+//   3. SCORE + THRESHOLD — re-rank with phrase-weighted scoring, then drop
+//      anything below a minimum score so the model never sees noise.
 
-async function searchKBItems(keywords: string[], limit = 5): Promise<KBSearchResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+const KB_MIN_SCORE     = 30   // KB item must have at least one phrase hit OR many term hits
+const APP_MIN_SCORE    = 25
+const GENERIC_MIN_SCORE = 25
 
-  const conditions = buildOr(['title', 'content_plain'], keywords)
-  const { data, error } = await supabaseAdmin
-    .from('knowledge_items')
-    .select('id, title, item_type, content_plain, tags, word_count')
-    .or(conditions)
-    .gt('word_count', 10)
-    .order('word_count', { ascending: false })
-    .limit(limit * 3)
+async function searchKBItems(
+  phrases: string[],
+  terms: string[],
+  limit = 5
+): Promise<KBSearchResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
 
-  if (error || !data) { if (error) console.error('[kb-chat] kb search:', error.message); return [] }
+  // Phrase pass — ILIKE the full phrase against title + content_plain
+  let data: any[] = []
+  if (phrases.length > 0) {
+    const phraseConditions = buildOr(['title', 'content_plain'], phrases)
+    const res = await supabaseAdmin
+      .from('knowledge_items')
+      .select('id, title, item_type, content_plain, tags, word_count')
+      .or(phraseConditions)
+      .gt('word_count', 10)
+      .order('word_count', { ascending: false })
+      .limit(limit * 3)
+    if (!res.error && res.data) data = res.data
+  }
 
-  // Re-rank by keyword density
+  // Fallback term pass only if no phrase hits
+  if (data.length === 0 && terms.length > 0) {
+    const termConditions = buildOr(['title', 'content_plain'], terms)
+    const res = await supabaseAdmin
+      .from('knowledge_items')
+      .select('id, title, item_type, content_plain, tags, word_count')
+      .or(termConditions)
+      .gt('word_count', 10)
+      .order('word_count', { ascending: false })
+      .limit(limit * 3)
+    if (!res.error && res.data) data = res.data
+  }
+
+  if (data.length === 0) return []
+
+  // Score with phrase + term weighting
   const ranked = data.map(item => {
-    const t = (item.title || '').toLowerCase()
-    const c = (item.content_plain || '').toLowerCase()
-    let score = 0
-    for (const kw of keywords) {
-      const re = new RegExp(kw, 'g')
-      score += (t.match(re) || []).length * 3
-      score += Math.min((c.match(re) || []).length, 20)
-    }
-    if (item.word_count > 500) score += 1
-    if (item.word_count > 2000) score += 1
-    return { ...item, score }
+    const { score, phraseHits } = scoreItem(
+      item.content_plain || '',
+      item.title || '',
+      phrases,
+      terms,
+    )
+    let finalScore = score
+    if (item.word_count > 500) finalScore += 1
+    if (item.word_count > 2000) finalScore += 1
+    return { ...item, score: finalScore, phraseHits }
   })
-  ranked.sort((a, b) => b.score - a.score)
 
-  return ranked.slice(0, limit).map(item => ({
+  // Threshold: must score above KB_MIN_SCORE.
+  // If we have phrases, also require at least 1 phrase hit unless score is very high on terms alone.
+  const filtered = ranked.filter(r => {
+    if (r.score < KB_MIN_SCORE) return false
+    if (phrases.length > 0 && r.phraseHits === 0 && r.score < KB_MIN_SCORE * 2) return false
+    return true
+  })
+
+  filtered.sort((a, b) => b.score - a.score)
+
+  return filtered.slice(0, limit).map(item => ({
     id: item.id,
     title: item.title,
     item_type: item.item_type,
@@ -113,16 +233,41 @@ async function searchKBItems(keywords: string[], limit = 5): Promise<KBSearchRes
   }))
 }
 
-async function searchAppCatalog(keywords: string[]): Promise<AppResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+async function searchAppCatalog(phrases: string[], terms: string[]): Promise<AppResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
   try {
-    const { data, error } = await supabaseAdmin
-      .from('app_catalog')
-      .select('*')
-      .or(buildOr(['name', 'subdomain'], keywords))
-      .limit(6)
-    if (error || !data) return []
-    return data.map((r: any) => ({
+    // Phrase pass first
+    let data: any[] = []
+    if (phrases.length > 0) {
+      const res = await supabaseAdmin
+        .from('app_catalog')
+        .select('*')
+        .or(buildOr(['name', 'subdomain'], phrases))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0 && terms.length > 0) {
+      const res = await supabaseAdmin
+        .from('app_catalog')
+        .select('*')
+        .or(buildOr(['name', 'subdomain'], terms))
+        .limit(8)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0) return []
+
+    // Re-score and threshold — keep only relevant apps
+    const ranked = data.map((r: any) => {
+      const haystack = `${r.name || ''} ${r.subdomain || ''} ${r.description || r.purpose || r.notes || ''}`
+      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
+      return { row: r, score, phraseHits }
+    })
+    const filtered = ranked.filter(x =>
+      x.score >= APP_MIN_SCORE || x.phraseHits > 0
+    )
+    filtered.sort((a, b) => b.score - a.score)
+    return filtered.slice(0, 5).map(({ row: r }) => ({
       subdomain: r.subdomain,
       name: r.name,
       hosting: r.hosting,
@@ -131,123 +276,237 @@ async function searchAppCatalog(keywords: string[]): Promise<AppResult[]> {
   } catch { return [] }
 }
 
-async function searchAiAgents(keywords: string[]): Promise<AgentResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+async function searchAiAgents(phrases: string[], terms: string[]): Promise<AgentResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
   try {
-    const { data, error } = await supabaseAdmin
-      .from('ai_agents')
-      .select('name, status, platform, metadata')
-      .or(buildOr(['name', 'metadata', 'platform'], keywords))
-      .limit(6)
-    if (error || !data) return []
-    return data.map((r: any) => ({
+    let data: any[] = []
+    if (phrases.length > 0) {
+      const res = await supabaseAdmin
+        .from('ai_agents')
+        .select('name, status, platform, metadata')
+        .or(buildOr(['name', 'metadata', 'platform'], phrases))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0 && terms.length > 0) {
+      const res = await supabaseAdmin
+        .from('ai_agents')
+        .select('name, status, platform, metadata')
+        .or(buildOr(['name', 'metadata', 'platform'], terms))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0) return []
+
+    const ranked = data.map((r: any) => {
+      const meta = typeof r.metadata === 'string' ? r.metadata : JSON.stringify(r.metadata || {})
+      const haystack = `${r.name || ''} ${r.platform || ''} ${meta}`
+      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
+      return { row: r, score, phraseHits, meta }
+    })
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
+    filtered.sort((a, b) => b.score - a.score)
+    return filtered.slice(0, 5).map(({ row: r, meta }) => ({
       name: r.name,
       status: r.status,
       platform: r.platform,
-      metadata: typeof r.metadata === 'string' ? r.metadata.slice(0, 400) : JSON.stringify(r.metadata || {}).slice(0, 400),
+      metadata: meta.slice(0, 400),
     }))
   } catch { return [] }
 }
 
-async function searchTechTools(keywords: string[]): Promise<ToolResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+async function searchTechTools(phrases: string[], terms: string[]): Promise<ToolResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
   try {
-    const { data, error } = await supabaseAdmin
-      .from('tech_tools')
-      .select('tool_name, function_description, login_page')
-      .or(buildOr(['tool_name', 'function_description'], keywords))
-      .limit(6)
-    if (error || !data) return []
-    return data as ToolResult[]
+    let data: any[] = []
+    if (phrases.length > 0) {
+      const res = await supabaseAdmin
+        .from('tech_tools')
+        .select('tool_name, function_description, login_page')
+        .or(buildOr(['tool_name', 'function_description'], phrases))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0 && terms.length > 0) {
+      const res = await supabaseAdmin
+        .from('tech_tools')
+        .select('tool_name, function_description, login_page')
+        .or(buildOr(['tool_name', 'function_description'], terms))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0) return []
+
+    const ranked = data.map((r: any) => {
+      const haystack = `${r.tool_name || ''} ${r.function_description || ''}`
+      const { score, phraseHits } = scoreItem(haystack, r.tool_name || '', phrases, terms)
+      return { row: r, score, phraseHits }
+    })
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
+    filtered.sort((a, b) => b.score - a.score)
+    return filtered.slice(0, 5).map(({ row: r }) => ({
+      tool_name: r.tool_name,
+      function_description: r.function_description,
+      login_page: r.login_page,
+    }))
   } catch { return [] }
 }
 
-async function searchOfferPipeline(keywords: string[]): Promise<OfferResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+async function searchOfferPipeline(phrases: string[], terms: string[]): Promise<OfferResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
   try {
-    // Try common columns; PostgREST will error if any column is missing in the OR.
-    // Wrap two attempts: with description, then without.
-    const tryQueries = [
-      ['name', 'description', 'offer_type'],
-      ['name'],
-    ]
-    for (const cols of tryQueries) {
-      const { data, error } = await supabaseAdmin
+    const colSets = [['name', 'description', 'offer_type'], ['name']]
+    let data: any[] = []
+
+    // Try phrase pass across column sets
+    for (const cols of colSets) {
+      if (data.length > 0 || phrases.length === 0) break
+      const res = await supabaseAdmin
         .from('offer_pipeline')
         .select('*')
-        .or(buildOr(cols, keywords))
+        .or(buildOr(cols, phrases))
         .limit(6)
-      if (!error && data) {
-        return data.map((r: any) => ({
-          name: r.name,
-          description: r.description || r.notes,
-          price_point: r.price_point,
-          offer_type: r.offer_type,
-        }))
+      if (!res.error && res.data && res.data.length > 0) { data = res.data; break }
+    }
+    // Term fallback only if phrase pass came up dry
+    if (data.length === 0 && terms.length > 0) {
+      for (const cols of colSets) {
+        const res = await supabaseAdmin
+          .from('offer_pipeline')
+          .select('*')
+          .or(buildOr(cols, terms))
+          .limit(8)
+        if (!res.error && res.data) { data = res.data; break }
       }
     }
-    return []
+    if (data.length === 0) return []
+
+    const ranked = data.map((r: any) => {
+      const haystack = `${r.name || ''} ${r.description || r.notes || ''} ${r.offer_type || ''}`
+      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
+      return { row: r, score, phraseHits }
+    })
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
+    filtered.sort((a, b) => b.score - a.score)
+    return filtered.slice(0, 5).map(({ row: r }) => ({
+      name: r.name,
+      description: r.description || r.notes,
+      price_point: r.price_point,
+      offer_type: r.offer_type,
+    }))
   } catch { return [] }
 }
 
-async function searchClickupTasks(keywords: string[]): Promise<TaskResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+async function searchClickupTasks(phrases: string[], terms: string[]): Promise<TaskResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
   try {
-    const tryQueries = [
-      ['name', 'text_content'],
-      ['name'],
-    ]
-    for (const cols of tryQueries) {
-      const { data, error } = await supabaseAdmin
+    const colSets = [['name', 'text_content'], ['name']]
+    let data: any[] = []
+
+    for (const cols of colSets) {
+      if (data.length > 0 || phrases.length === 0) break
+      const res = await supabaseAdmin
         .from('clickup_tasks')
         .select('*')
-        .or(buildOr(cols, keywords))
+        .or(buildOr(cols, phrases))
         .limit(6)
-      if (!error && data) {
-        return data.map((r: any) => ({
-          id: r.id || r.task_id,
-          name: r.name,
-          text_content: (r.text_content || r.description || '').slice(0, 400),
-          status: r.status,
-          url: r.url,
-        }))
+      if (!res.error && res.data && res.data.length > 0) { data = res.data; break }
+    }
+    if (data.length === 0 && terms.length > 0) {
+      for (const cols of colSets) {
+        const res = await supabaseAdmin
+          .from('clickup_tasks')
+          .select('*')
+          .or(buildOr(cols, terms))
+          .limit(8)
+        if (!res.error && res.data) { data = res.data; break }
       }
     }
-    return []
+    if (data.length === 0) return []
+
+    const ranked = data.map((r: any) => {
+      const haystack = `${r.name || ''} ${r.text_content || r.description || ''}`
+      const { score, phraseHits } = scoreItem(haystack, r.name || '', phrases, terms)
+      return { row: r, score, phraseHits }
+    })
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
+    filtered.sort((a, b) => b.score - a.score)
+    return filtered.slice(0, 5).map(({ row: r }) => ({
+      id: r.id || r.task_id,
+      name: r.name,
+      text_content: (r.text_content || r.description || '').slice(0, 400),
+      status: r.status,
+      url: r.url,
+    }))
   } catch { return [] }
 }
 
-async function searchCredentials(keywords: string[]): Promise<CredentialResult[]> {
-  if (!supabaseAdmin || keywords.length === 0) return []
+async function searchCredentials(phrases: string[], terms: string[]): Promise<CredentialResult[]> {
+  if (!supabaseAdmin) return []
+  if (phrases.length === 0 && terms.length === 0) return []
   try {
-    const { data, error } = await supabaseAdmin
-      .from('credential_registry')
-      .select('service, deployed_locations')
-      .or(buildOr(['service'], keywords))
-      .limit(6)
-    if (error || !data) return []
-    return data as CredentialResult[]
+    // Credentials: phrase pass then term pass
+    let data: any[] = []
+    if (phrases.length > 0) {
+      const res = await supabaseAdmin
+        .from('credential_registry')
+        .select('service, deployed_locations')
+        .or(buildOr(['service'], phrases))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0 && terms.length > 0) {
+      const res = await supabaseAdmin
+        .from('credential_registry')
+        .select('service, deployed_locations')
+        .or(buildOr(['service'], terms))
+        .limit(6)
+      if (!res.error && res.data) data = res.data
+    }
+    if (data.length === 0) return []
+
+    const ranked = data.map((r: any) => {
+      const { score, phraseHits } = scoreItem(r.service || '', r.service || '', phrases, terms)
+      return { row: r, score, phraseHits }
+    })
+    const filtered = ranked.filter(x => x.score >= GENERIC_MIN_SCORE || x.phraseHits > 0)
+    filtered.sort((a, b) => b.score - a.score)
+    return filtered.slice(0, 5).map(({ row: r }) => r as CredentialResult)
   } catch { return [] }
 }
 
 /** Federated search across the enterprise platform */
-async function federatedSearch(query: string): Promise<FederatedContext> {
-  const keywords = extractKeywords(query)
-  if (keywords.length === 0) {
-    return { kbItems: [], apps: [], agents: [], tools: [], offers: [], tasks: [], credentials: [] }
+async function federatedSearch(query: string): Promise<{
+  context: FederatedContext
+  phrases: string[]
+  terms: string[]
+}> {
+  const { phrases, terms } = extractQuery(query)
+  if (phrases.length === 0 && terms.length === 0) {
+    return {
+      context: { kbItems: [], apps: [], agents: [], tools: [], offers: [], tasks: [], credentials: [] },
+      phrases, terms,
+    }
   }
 
   const [kbItems, apps, agents, tools, offers, tasks, credentials] = await Promise.all([
-    searchKBItems(keywords),
-    searchAppCatalog(keywords),
-    searchAiAgents(keywords),
-    searchTechTools(keywords),
-    searchOfferPipeline(keywords),
-    searchClickupTasks(keywords),
-    searchCredentials(keywords),
+    searchKBItems(phrases, terms),
+    searchAppCatalog(phrases, terms),
+    searchAiAgents(phrases, terms),
+    searchTechTools(phrases, terms),
+    searchOfferPipeline(phrases, terms),
+    searchClickupTasks(phrases, terms),
+    searchCredentials(phrases, terms),
   ])
 
-  return { kbItems, apps, agents, tools, offers, tasks, credentials }
+  return {
+    context: { kbItems, apps, agents, tools, offers, tasks, credentials },
+    phrases, terms,
+  }
 }
 
 // ── Prompt Builder ────────────────────────────────────────────────────────
@@ -258,8 +517,18 @@ interface PageContext {
   itemId?: string
 }
 
-function buildSystemPrompt(ctx: FederatedContext, pageContext?: PageContext): string {
+function buildSystemPrompt(
+  ctx: FederatedContext,
+  phrases: string[],
+  terms: string[],
+  pageContext?: PageContext,
+): string {
   const blocks: string[] = []
+  const totalHits =
+    ctx.kbItems.length + ctx.apps.length + ctx.agents.length +
+    ctx.tools.length + ctx.offers.length + ctx.tasks.length + ctx.credentials.length
+
+  const queryDebug = `\n## Query Analysis\n- Detected phrases: ${phrases.length ? phrases.map(p => `"${p}"`).join(', ') : '(none)'}\n- Single terms: ${terms.length ? terms.join(', ') : '(none)'}\n- Total qualified matches across enterprise tables: ${totalHits}\n`
 
   if (ctx.kbItems.length > 0) {
     let b = '\n## Relevant Knowledge Base Items\n\n'
@@ -325,8 +594,17 @@ function buildSystemPrompt(ctx: FederatedContext, pageContext?: PageContext): st
   }
 
   const contextBlock = blocks.length > 0
-    ? blocks.join('\n')
-    : '\n## No direct matches in enterprise data\n\nThe keyword search did not surface specific records. Acknowledge this, suggest related searches, or ask the user to refine.\n'
+    ? queryDebug + '\n' + blocks.join('\n')
+    : queryDebug + `\n## No qualified matches in enterprise data
+
+The federated search across knowledge_items, app_catalog, ai_agents, tech_tools, offer_pipeline, clickup_tasks, and credential_registry did NOT find any records that passed the relevance threshold for the detected phrases/terms.
+
+CRITICAL: Do NOT fabricate sources or pretend you found something. Tell the user honestly:
+1. You searched all 7 enterprise tables and found no qualifying matches.
+2. Echo back the phrases you searched for so they can refine.
+3. Suggest more specific entity names or a different table to look in.
+4. Optionally offer to create a ClickUp task or a KB stub for the missing knowledge.
+`
 
   const pageBlock = pageContext?.title ? `
 ## Current Page Context
@@ -393,10 +671,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Federated enterprise search
-    const ctx = await federatedSearch(lastUserMessage.content)
+    // Federated enterprise search (phrase-first, threshold-filtered)
+    const { context: ctx, phrases, terms } = await federatedSearch(lastUserMessage.content)
 
-    const systemPrompt = buildSystemPrompt(ctx, pageContext)
+    const systemPrompt = buildSystemPrompt(ctx, phrases, terms, pageContext)
     const fullMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages.slice(-10),
