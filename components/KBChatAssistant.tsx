@@ -406,23 +406,23 @@ export function KBChatAssistant() {
                   : <div className="kb-chat-content">{renderMessageContent(msg.content)}</div>}
               </div>
               {msg.role === 'assistant' && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, fontSize: 10 }}>
+                <div className="kb-chat-actions">
                   <button
                     onClick={() => saveAsNote(i)}
-                    className="kb-chat-source-tag"
-                    title="Save this conversation as a KB note"
-                    style={{ cursor: 'pointer', border: 'none' }}>
+                    className="kb-chat-action-btn"
+                    title="Save this entire conversation as a KB note"
+                    disabled={msgActionState[i] === 'saving…'}>
                     💾 Save as KB note
                   </button>
                   <button
                     onClick={() => makeTask(i, msg.content)}
-                    className="kb-chat-source-tag"
-                    title="Create a ClickUp task from this reply"
-                    style={{ cursor: 'pointer', border: 'none' }}>
+                    className="kb-chat-action-btn"
+                    title="Create a ClickUp task from this reply (auto-routed)"
+                    disabled={msgActionState[i] === 'creating task…'}>
                     ✅ Make this a task
                   </button>
                   {msgActionState[i] && (
-                    <span style={{ fontSize: 10, color: '#9ca3af', alignSelf: 'center' }}>
+                    <span className="kb-chat-action-status">
                       {msgActionState[i].startsWith('saved → ') ? (
                         <a href={msgActionState[i].replace('saved → ', '')}
                            className="text-amber-600 dark:text-amber-400 underline">
