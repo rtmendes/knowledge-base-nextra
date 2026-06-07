@@ -72,7 +72,7 @@ function renderMessageContent(content: string) {
   return <>{elements}</>
 }
 
-// ── Chief OS Staff ────────────────────────────────────────────────────────
+// ── Chief of Staff ────────────────────────────────────────────────────────
 
 export function KBChatAssistant() {
   const [open, setOpen]                         = useState(false)
@@ -190,9 +190,9 @@ export function KBChatAssistant() {
     <>
       {/* Persistent right-edge vertical tab */}
       <button onClick={() => setOpen(o => !o)} className="kb-chief-tab"
-        aria-label="Chief OS Staff" title="Chief OS Staff · KB Orchestrator">
+        aria-label="Chief of Staff" title="Chief of Staff · KB Orchestrator">
         <span style={{ fontSize: '1.1rem' }}>🤖</span>
-        <span className="kb-chief-tab-label">Chief OS Staff</span>
+        <span className="kb-chief-tab-label">Chief of Staff</span>
         {messages.length > 0 && (
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399',
             boxShadow: '0 0 6px rgba(52,211,153,0.8)', flexShrink: 0 }} />
@@ -214,8 +214,8 @@ export function KBChatAssistant() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className="kb-chief-avatar">🤖</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', lineHeight: 1.2 }}>Chief OS Staff</div>
-              <div style={{ fontSize: 10, color: 'rgba(216,180,254,0.8)', lineHeight: 1.3 }}>KB Orchestrator · InsightProfit</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', lineHeight: 1.2 }}>Chief of Staff</div>
+              <div style={{ fontSize: 10, color: 'rgba(216,180,254,0.8)', lineHeight: 1.3 }}>Enterprise Orchestrator · InsightProfit</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
@@ -277,12 +277,12 @@ export function KBChatAssistant() {
           {messages.length === 0 && !loading && (
             <div className="kb-chat-welcome">
               <div style={{ fontSize: '2rem' }}>🤖</div>
-              <p style={{ fontWeight: 600, fontSize: 13 }}>Chief OS Staff Ready</p>
+              <p style={{ fontWeight: 600, fontSize: 13 }}>Chief of Staff Ready</p>
               <p style={{ fontSize: 11, color: '#6b7280', maxWidth: 240, textAlign: 'center' }}>
-                {"I'm your KB orchestrator. Ask anything, use the quick tools, or say what you want to build."}
+                {"I have full visibility into the InsightProfit enterprise — KB, apps, agents, tools, offers, tasks, credentials. Ask me anything."}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, justifyContent: 'center' }}>
-                {['What SOPs exist?', 'Find product docs', 'Summarize this page'].map(q => (
+                {['Where are the design docs for Family Gift Studio?', 'List active AI agents', 'What offers are in the pipeline?'].map(q => (
                   <button key={q} onClick={() => sendMessage(q)} className="kb-chat-suggestion">{q}</button>
                 ))}
               </div>
@@ -329,7 +329,7 @@ export function KBChatAssistant() {
         <form onSubmit={(e: FormEvent) => { e.preventDefault(); sendMessage() }} className="kb-chat-input-area">
           <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-            className="kb-chat-input" placeholder="Ask Chief OS Staff anything…"
+            className="kb-chat-input" placeholder="Ask Chief of Staff anything…"
             disabled={loading} autoComplete="off" />
           <button type="submit" disabled={loading || !input.trim()} className="kb-chat-send-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
