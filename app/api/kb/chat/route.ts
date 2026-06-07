@@ -590,7 +590,19 @@ async function searchClickupTasks(phrases: string[], terms: string[], groups: st
     }
     if (data.length === 0) return []
 
-    const ranked = data.map((r: any) => {
+    // Filter out inactive tasks — Rashida uses 🟡 STALLED:/🔴 BLOCKED: prefixes
+    // and also explicit status='closed'/'archived'/'done' rows. Surfacing those
+    // as recommendations is misleading; an agent shouldn't cite zombie work.
+    const INACTIVE_STATUSES = new Set(['closed', 'archived', 'done', 'cancelled', 'canceled', 'complete', 'completed'])
+    const INACTIVE_TITLE_RX = /^[\s]*(🟡\s*stalled|🔴\s*blocked|⚫\s*archived|✅\s*done|❌\s*cancelled)\s*:/i
+    const active = data.filter((r: any) => {
+      if (INACTIVE_STATUSES.has(String(r.status || '').toLowerCase())) return false
+      if (INACTIVE_TITLE_RX.test(r.name || '')) return false
+      return true
+    })
+    if (active.length === 0) return []
+
+    const ranked = active.map((r: any) => {
       const haystack = `${r.name || ''} ${r.text_content || r.description || ''}`
       const { score, phraseHits, groupsHit } = scoreItem(haystack, r.name || '', phrases, terms, groups)
       return { row: r, score, phraseHits, groupsHit }
