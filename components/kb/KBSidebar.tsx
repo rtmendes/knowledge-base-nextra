@@ -3,6 +3,15 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import {
+  DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  closestCenter, type DragStartEvent, type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { flattenTree, moveSubtree, deriveUpdates, diffUpdates } from '../../lib/kb-tree'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -14,6 +23,7 @@ interface Category {
   color: string
   item_count: number
   parent_category_id?: string | null
+  sort_order?: number
 }
 
 interface SidebarItem {
@@ -81,6 +91,23 @@ const ICON_MAP: Record<string, string> = {
 
 function getCatIcon(icon: string): string {
   return ICON_MAP[icon] || icon || '📁'
+}
+
+// ── dnd-kit sortable wrapper (render-prop, so renderCategory keeps its closures) ──
+function SortableCat({ id, children }: { id: string; children: (p: {
+  setNodeRef: (el: HTMLElement | null) => void
+  attributes: any
+  listeners: any
+  style: React.CSSProperties
+  isDragging: boolean
+}) => React.ReactNode }) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id })
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+  return <>{children({ setNodeRef, attributes, listeners, style, isDragging })}</>
 }
 
 // ── Sidebar Component ─────────────────────────────────────────────────────
@@ -510,19 +537,9 @@ export function KBSidebar({
     }
   }, [categoryItems])
 
-  // ── Category Drag ────────────────────────────────────────────────────────
-
-  const handleCatDragStart = useCallback((e: React.DragEvent, catId: string) => {
-    e.stopPropagation()
-    e.dataTransfer.setData('application/kb-cat-id', catId)
-    e.dataTransfer.effectAllowed = 'move'
-    setDraggingCatId(catId)
-  }, [])
-
-  const handleCatDragEnd = useCallback(() => {
-    setDraggingCatId(null)
-    setDragOverCategory(null)
-  }, [])
+  // ── Category Drag ─ now handled by dnd-kit (see handleCatDragEndDnd) ──────────
+  // Native category-drag handlers were removed; `draggingCatId` stays null and its
+  // old root-drop zone is inert. Category reorder/nest now persists via the engine.
 
   // ── Nested hierarchy helpers ─────────────────────────────────────────────
 
@@ -574,6 +591,67 @@ export function KBSidebar({
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
     [categories]
   )
+
+  // ── dnd-kit category tree drag (Notion-style: subtree travels, persists to DB) ──
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const [activeCatId, setActiveCatId] = useState<string | null>(null)
+  const dndEnabled = !sidebarFilter
+
+  // Visible categories in the SAME DFS order they render (roots → expanded children).
+  const visibleCatIds = useMemo(() => {
+    const ids: string[] = []
+    const walk = (cat: Category) => {
+      ids.push(cat.id)
+      if (expandedCategories.has(cat.id)) {
+        for (const cc of (categoryTree.childCatMap[cat.id] || [])) walk(cc)
+      }
+    }
+    for (const root of categoryTree.rootCats) walk(root)
+    return ids
+  }, [categoryTree, expandedCategories])
+
+  const persistTree = useCallback(async (next: Category[], updates: { id: string; parent_category_id: string | null; sort_order: number }[]) => {
+    if (updates.length === 0) return
+    const prevSnapshot = categories
+    setCategories(next) // optimistic
+    try {
+      const res = await fetch('/api/kb/categories/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+      if (!res.ok) throw new Error('reorder failed')
+    } catch {
+      setCategories(prevSnapshot) // revert on failure
+      try {
+        const r = await fetch('/api/kb/categories')
+        if (r.ok) { const d = await r.json(); if (Array.isArray(d.categories)) setCategories(d.categories) }
+      } catch {}
+    }
+  }, [categories])
+
+  const handleCatDragEndDnd = useCallback((e: DragEndEvent) => {
+    setActiveCatId(null)
+    if (!dndEnabled) return
+    const { active, over, delta } = e
+    if (!over || active.id === over.id) return
+    const tree = categories.map(c => ({ id: c.id, parent_category_id: c.parent_category_id ?? null, sort_order: c.sort_order ?? 0 }))
+    const flat = flattenTree(tree)
+    const moved = moveSubtree(flat, String(active.id), String(over.id), delta.x)
+    if (moved === flat) return // invalid (e.g. into own subtree)
+    const updates = deriveUpdates(moved)
+    const changed = diffUpdates(tree, updates)
+    if (changed.length === 0) return
+    const byId = new Map(updates.map(u => [u.id, u]))
+    const next = categories.map(c => {
+      const u = byId.get(c.id)
+      return u ? { ...c, parent_category_id: u.parent_category_id, sort_order: u.sort_order } : c
+    })
+    persistTree(next, changed)
+  }, [categories, persistTree])
 
   const isItemActive = (itemId: string) => pathname === `/kb/item/${itemId}`
   const isCategoryActive = (slug: string) => pathname === `/kb/${slug}`
@@ -705,7 +783,6 @@ export function KBSidebar({
     const isExpanded = expandedCategories.has(cat.id)
     const isActive = isCategoryActive(cat.slug)
     const isLoading = loadingCategories.has(cat.id)
-    const isDraggingThis = draggingCatId === cat.id
     const isDropTarget = dragOverCategory === cat.id
     const isRenaming = renamingCatId === cat.id
     const icon = getCatIcon(cat.icon)
@@ -713,15 +790,15 @@ export function KBSidebar({
     const { rootItems, childMap } = getNestedItems(cat.id, sidebarFilter)
 
     return (
+      <SortableCat id={cat.id} key={cat.id}>
+        {({ setNodeRef, attributes: gripAttrs, listeners: gripListeners, style: dndStyle, isDragging: dndDragging }) => (
       <div
-        key={cat.id}
-        className={`mb-0.5 transition-opacity ${isDraggingThis ? 'opacity-40' : ''}`}
+        ref={setNodeRef}
+        style={dndStyle}
+        className={`mb-0.5 transition-opacity ${dndDragging ? 'opacity-40' : ''}`}
       >
         {/* Category Row */}
         <div
-          draggable
-          onDragStart={(e) => handleCatDragStart(e, cat.id)}
-          onDragEnd={handleCatDragEnd}
           onDragOver={(e) => handleDragOverCategory(e, cat.id)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDropOnCategory(e, cat.id)}
@@ -741,8 +818,8 @@ export function KBSidebar({
         >
           {/* Drag handle + expand chevron */}
           <div className="flex-shrink-0 flex items-center gap-0.5">
-            {/* Drag handle — visible on hover */}
-            <span className="opacity-0 group-hover:opacity-40 cursor-grab active:cursor-grabbing text-gray-400 select-none text-[10px] leading-none mr-0.5">⠿</span>
+            {/* Drag handle — dnd-kit grip, visible on hover */}
+            <span {...gripAttrs} {...gripListeners} title="Drag to move / nest" className="opacity-0 group-hover:opacity-60 cursor-grab active:cursor-grabbing text-gray-400 select-none text-[10px] leading-none mr-0.5 touch-none">⠿</span>
             <button
               onClick={(e) => { e.stopPropagation(); toggleCategory(cat.id) }}
               className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -838,6 +915,8 @@ export function KBSidebar({
           </div>
         )}
       </div>
+        )}
+      </SortableCat>
     )
   }
 
@@ -989,7 +1068,29 @@ export function KBSidebar({
               </div>
             </div>
 
-            {filteredCategories.map(cat => renderCategory(cat))}
+            <DndContext
+              sensors={dndSensors}
+              collisionDetection={closestCenter}
+              onDragStart={(e: DragStartEvent) => setActiveCatId(String(e.active.id))}
+              onDragEnd={handleCatDragEndDnd}
+              onDragCancel={() => setActiveCatId(null)}
+            >
+              <SortableContext items={visibleCatIds} strategy={verticalListSortingStrategy}>
+                {filteredCategories.map(cat => renderCategory(cat))}
+              </SortableContext>
+              <DragOverlay dropAnimation={null}>
+                {activeCatId ? (
+                  <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white dark:bg-gray-900 shadow-lg ring-1 ring-amber-300 dark:ring-amber-700 text-xs font-medium text-gray-800 dark:text-gray-200">
+                    <span className="text-sm">{getCatIcon(categories.find(c => c.id === activeCatId)?.icon || '')}</span>
+                    <span className="truncate max-w-[140px]">{categories.find(c => c.id === activeCatId)?.name}</span>
+                    {(() => {
+                      const kids = categories.filter(c => c.parent_category_id === activeCatId).length
+                      return kids > 0 ? <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full">+{kids}</span> : null
+                    })()}
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </div>
 

@@ -1,0 +1,13 @@
+#!/bin/bash
+# KB SITE UPGRADE session — PAID (direct Anthropic). The REAL KB product.
+# Rashida 2026-06-12: kb.insightprofit.live is the KB we invested in and want
+# improved. The command-center kb-native table was the wrong surface.
+set -e
+cd /Users/rmmakeithappen/Projects/docs/knowledge-base-nextra
+
+PROMPT='You are the dedicated KB SITE UPGRADE session (paid direct connection). The product is kb.insightprofit.live — THIS repo (knowledge-base-nextra, Nextra 4.5.1). Rashida invested heavily in this site: 12,421 items, 28 curated category cards, premium light design, an existing Chief-of-Staff chat widget, pagefind search. Verdict on a recent alternative (a dark flat data-table KB view in the command center): "horrible, stripped down, useless." LESSON: PRESERVE AND ELEVATE THIS SITE'"'"'S EXISTING DESIGN LANGUAGE — enhance, never replace it with tables.
+CONTEXT TO READ FIRST: this repo end to end (layout, theme, existing /api routes, chief-of-staff code, pagefind setup), then /Users/rmmakeithappen/Projects/insightprofit/insightprofit-command-v2/docs/KB/INVENTORY.md and PRD.md (the KB landscape + backend already built: command-v2 has /api/kb CRUD+ingest against the same Supabase knowledge_items — reuse the patterns or call those endpoints rather than reinventing).
+MISSION — make THIS site the one complete KB: (1) WRITE LAYER: in-app Add/Edit item and Ingest-from-URL (FIRECRAWL_API_KEY) flows that match the site'"'"'s design (modal/drawer, not a new page-of-tables); single-user enterprise — no extra auth walls. (2) SEARCH: ensure full-content search across all 12.4k items (pagefind exists — verify coverage, add filters by category/type/tag); search must be reachable from every page. (3) AGENTIC CHAT: deepen the existing chat widget — it must be able to SEARCH the KB, ANSWER from it with item links, and ADD/UPDATE items on request (kb_add/kb_update tools), free-first models only for AI calls. (4) DATA IN/OUT per standing rules: CSV export, bulk URL import from a pasted list. (5) Keep it fast, mobile responsive, and visually consistent with the current premium look.
+WORKING METHOD: commit to disk INCREMENTALLY per feature (never hold work only in context). Write docs/UPGRADE-PLAN.md first (what exists → what you will add → file map), commit it, then build feature by feature. HARD RULES: never write secrets to files; env vars stay in .env*; do not degrade the existing design; do not delete existing content/pages. VERIFY: npm run build clean, Playwright smoke (home renders, search returns results, add-item modal opens). Branch ip/kb-site-upgrade, push, open a PR with gh when done.'
+
+exec env -u ANTHROPIC_BASE_URL -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY claude "$PROMPT"
