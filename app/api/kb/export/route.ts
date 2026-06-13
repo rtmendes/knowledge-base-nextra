@@ -5,7 +5,9 @@ export const dynamic = 'force-dynamic'
 
 function escapeCsv(val: unknown): string {
   if (val === null || val === undefined) return ''
-  const str = Array.isArray(val) ? val.join('; ') : String(val)
+  let str = Array.isArray(val) ? val.join('; ') : String(val)
+  // Neutralize formula injection: prefix =, +, -, @, tab, CR with a single quote
+  if (/^[=+\-@\t\r]/.test(str)) str = "'" + str
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return '"' + str.replace(/"/g, '""') + '"'
   }
