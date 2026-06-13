@@ -127,6 +127,7 @@ export async function getItems(opts: {
   page?: number
   limit?: number
   hasContent?: boolean
+  tag?: string
 }): Promise<{ items: KBItem[]; total: number }> {
   if (!supabaseAdmin) return { items: [], total: 0 }
 
@@ -142,6 +143,10 @@ export async function getItems(opts: {
   if (opts.itemType) query = query.eq('item_type', opts.itemType)
   if (opts.status) query = query.eq('status', opts.status)
   if (opts.hasContent) query = query.gt('word_count', 0)
+  // `tags` is a jsonb column — pass a JSON-array string so PostgREST emits the
+  // jsonb containment form (cs.["x"]). A JS array would emit the text[] form
+  // (cs.{x}) which does NOT match this jsonb column.
+  if (opts.tag) query = query.contains('tags', JSON.stringify([opts.tag]))
 
   if (opts.search) {
     query = query.or(`title.ilike.%${opts.search}%,content_plain.ilike.%${opts.search}%`)
