@@ -8,6 +8,7 @@ import { CommandPalette } from './CommandPalette'
 import { CreateItemModal } from './CreateItemModal'
 import { CreateCategoryModal } from './CreateCategoryModal'
 import { BulkOperationsBar } from './BulkOperationsBar'
+import { BulkImportModal } from './BulkImportModal'
 import { TagsPanel } from './TagsPanel'
 import { ResizablePanelGroup } from './ResizablePanels'
 
@@ -40,6 +41,7 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false)
   const [tagsPanelOpen, setTagsPanelOpen] = useState(false)
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
 
   // Bulk selection state
   const [selectionMode, setSelectionMode] = useState(false)
@@ -202,6 +204,27 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
             <span className="hidden sm:inline">Tags</span>
           </button>
 
+          {/* Bulk import button */}
+          <button
+            onClick={() => setBulkImportOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="Bulk import URLs"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            <span className="hidden sm:inline">Import</span>
+          </button>
+
+          {/* CSV export button */}
+          <a
+            href="/api/kb/export"
+            download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="Export to CSV"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <span className="hidden sm:inline">Export</span>
+          </a>
+
           {/* Selection mode toggle */}
           <button
             onClick={handleToggleSelectionMode}
@@ -281,6 +304,13 @@ export function KBWorkspaceLayout({ categories: initialCategories, children, rig
       <TagsPanel
         isOpen={tagsPanelOpen}
         onClose={() => setTagsPanelOpen(false)}
+      />
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={bulkImportOpen}
+        onClose={() => setBulkImportOpen(false)}
+        categories={categories}
       />
 
       {/* Bulk Operations Bar */}

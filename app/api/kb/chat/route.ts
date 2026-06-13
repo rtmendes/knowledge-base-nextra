@@ -1032,6 +1032,113 @@ async function logAssistantMessage(
   }
 }
 
+// ── KB Write Tools ────────────────────────────────────────────────────────
+
+const KB_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'kb_add',
+      description: 'Create a new item in the Knowledge Base. Use when the user asks to add, save, capture, or create a KB page/note about a topic.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Title for the new KB item' },
+          content: { type: 'string', description: 'Markdown content for the item (can be detailed)' },
+          item_type: { type: 'string', enum: ['sop', 'prd', 'inspiration', 'imported', 'agent', 'launch_plan'], description: 'Type of KB item' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Tags to apply to the item' },
+        },
+        required: ['title', 'content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'kb_update',
+      description: 'Update the content of an existing KB item by ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          item_id: { type: 'string', description: 'UUID of the KB item to update' },
+          content: { type: 'string', description: 'New full markdown content for the item' },
+        },
+        required: ['item_id', 'content'],
+      },
+    },
+  },
+]
+
+async function executeKbTool(
+  name: string,
+  argsRaw: string,
+): Promise<{ success: boolean; id?: string; title?: string; url?: string; error?: string }> {
+  if (!supabaseAdmin) return { success: false, error: 'DB not configured' }
+  let args: Record<string, any>
+  try { args = JSON.parse(argsRaw) } catch { return { success: false, error: 'Invalid tool arguments' } }
+
+  if (name === 'kb_add') {
+    // Pick the first active category as fallback
+    let categoryId: string | null = null
+    const { data: cats } = await supabaseAdmin
+      .from('kb_categories')
+      .select('id')
+      .gt('item_count', 0)
+      .order('item_count', { ascending: false })
+      .limit(1)
+    if (cats?.length) categoryId = cats[0].id
+
+    if (!categoryId) return { success: false, error: 'No categories available' }
+
+    const slug = (args.title as string)
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .substring(0, 200)
+    const content = String(args.content || '')
+    const contentPlain = content.replace(/[#*_`[\]]/g, ' ').replace(/\s+/g, ' ').trim()
+    const wordCount = contentPlain.split(/\s+/).filter((w: string) => w.length > 0).length
+    const now = new Date().toISOString()
+
+    const { data, error } = await supabaseAdmin
+      .from('knowledge_items')
+      .insert({
+        title: String(args.title).trim(),
+        slug,
+        item_type: args.item_type || 'imported',
+        category_id: categoryId,
+        content,
+        content_plain: contentPlain,
+        word_count: wordCount,
+        status: 'active',
+        tags: Array.isArray(args.tags) ? args.tags : [],
+        metadata: {},
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id, title')
+      .single()
+
+    if (error) return { success: false, error: error.message }
+    try { await supabaseAdmin.rpc('increment_category_count', { cat_id: categoryId }) } catch { /* non-critical */ }
+    return { success: true, id: data.id, title: data.title, url: `/kb/item/${data.id}` }
+  }
+
+  if (name === 'kb_update') {
+    const content = String(args.content || '')
+    const contentPlain = content.replace(/[#*_`[\]]/g, ' ').replace(/\s+/g, ' ').trim()
+    const wordCount = contentPlain.split(/\s+/).filter((w: string) => w.length > 0).length
+    const { error } = await supabaseAdmin
+      .from('knowledge_items')
+      .update({ content, content_plain: contentPlain, word_count: wordCount, updated_at: new Date().toISOString() })
+      .eq('id', String(args.item_id))
+    if (error) return { success: false, error: error.message }
+    return { success: true, id: String(args.item_id), url: `/kb/item/${args.item_id}` }
+  }
+
+  return { success: false, error: `Unknown tool: ${name}` }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -1085,6 +1192,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: 'openai/gpt-4o-mini',
         messages: fullMessages,
+        tools: KB_TOOLS,
+        tool_choice: 'auto',
         stream: true,
         temperature: 0.3,
         max_tokens: 2000,
@@ -1190,8 +1299,37 @@ export async function POST(req: NextRequest) {
           encoder.encode(`data: ${JSON.stringify({ type: 'sources', sources: sourcesPayload })}\n\n`)
         )
 
+        // Helper to relay a streaming OpenRouter response to the client
+        const relayStream = async (resp: globalThis.Response) => {
+          const rdr = resp.body!.getReader()
+          let buf = ''
+          while (true) {
+            const { done, value } = await rdr.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            const lines = buf.split('\n')
+            buf = lines.pop() || ''
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed || !trimmed.startsWith('data: ')) continue
+              const d = trimmed.slice(6)
+              if (d === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); continue }
+              try {
+                const parsed = JSON.parse(d)
+                const content = parsed.choices?.[0]?.delta?.content
+                if (content) {
+                  assistantBuffer += content
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content })}\n\n`))
+                }
+              } catch { /* skip */ }
+            }
+          }
+        }
+
         const reader = response.body!.getReader()
         let buffer = ''
+        // Tool call accumulation
+        let tcId = '', tcName = '', tcArgs = ''
 
         try {
           while (true) {
@@ -1206,29 +1344,77 @@ export async function POST(req: NextRequest) {
               const trimmed = line.trim()
               if (!trimmed || !trimmed.startsWith('data: ')) continue
               const data = trimmed.slice(6)
-              if (data === '[DONE]') {
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-                continue
-              }
+              if (data === '[DONE]') continue // handled after loop
               try {
                 const parsed = JSON.parse(data)
-                const content = parsed.choices?.[0]?.delta?.content
+                const delta = parsed.choices?.[0]?.delta
+                if (!delta) continue
+
+                // Collect tool call deltas
+                if (delta.tool_calls?.length) {
+                  const tc = delta.tool_calls[0]
+                  if (tc.id) tcId = tc.id
+                  if (tc.function?.name) tcName = tc.function.name
+                  if (tc.function?.arguments) tcArgs += tc.function.arguments
+                }
+
+                // Regular content
+                const content = delta.content
                 if (content) {
                   assistantBuffer += content
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ type: 'content', content })}\n\n`)
-                  )
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content })}\n\n`))
                 }
-              } catch {
-                // skip
-              }
+              } catch { /* skip */ }
             }
           }
+
+          // After stream: handle tool call if present
+          if (tcId && tcName && tcArgs) {
+            const toolResult = await executeKbTool(tcName, tcArgs)
+
+            // Emit a tool action event so the UI can show a card
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'tool_action', tool: tcName, result: toolResult })}\n\n`)
+            )
+
+            // Make second request to get the natural language confirmation
+            const secondResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'HTTP-Referer': 'https://kb.insightprofit.live',
+                'X-Title': 'InsightProfit Chief of Staff',
+              },
+              body: JSON.stringify({
+                model: 'openai/gpt-4o-mini',
+                messages: [
+                  ...fullMessages,
+                  { role: 'assistant', content: null, tool_calls: [{ id: tcId, type: 'function', function: { name: tcName, arguments: tcArgs } }] },
+                  { role: 'tool', tool_call_id: tcId, content: JSON.stringify(toolResult) },
+                ],
+                stream: true,
+                temperature: 0.3,
+                max_tokens: 500,
+              }),
+            })
+
+            if (secondResp.ok) {
+              await relayStream(secondResp)
+            } else {
+              const msg = toolResult.success
+                ? `Done — created KB item "${toolResult.title}" at [/kb/item/${toolResult.id}](/kb/item/${toolResult.id}).`
+                : `Sorry, I couldn't complete that: ${toolResult.error}`
+              assistantBuffer += msg
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: msg })}\n\n`))
+            }
+          }
+
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         } catch (err) {
           console.error('[kb-chat] Stream error:', err)
         } finally {
           controller.close()
-          // Fire-and-forget: persist assistant message after stream closes.
           if (conversationId && assistantBuffer) {
             void logAssistantMessage(conversationId, assistantBuffer, sourcesPayload, matchedEntities)
           }
