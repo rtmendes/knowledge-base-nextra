@@ -2,7 +2,20 @@
 
 All notable changes to knowledge-base-nextra (kb.insightprofit.live).
 
-## [Unreleased] — 2026-07-02 (feat/kb-canonical-reader)
+## [Unreleased] — 2026-07-02 (chore/kb-embedding-backfill)
+
+### Changed
+- **Embedding backfill completed** — 48 active items missing embeddings (9 SOPs incl.
+  Agent Intercom Protocol AIP-001, 5 PRDs, 23 external references, 3 ingest-test items)
+  embedded via the existing `POST /api/kb/backfill` endpoint using the self-hosted
+  embed service (embed.insightprofit.live, 384-dim vectors, $0 cost). 0 active items
+  remain unembedded; all now findable via `/api/kb/search` semantic search.
+  Verified: "agent intercom protocol" returns the actual AIP-001 SOP as top hit.
+- **Deprecation warning added to `scripts/kb-enrichment/embed-kb-items.mjs`** — the
+  OpenAI-based script writes 1536-dim vectors, incompatible with the KB's 384-dim
+  embedding column and `search_kb_by_embedding` RPC. Use `POST /api/kb/backfill` instead.
+
+## [Merged] — 2026-07-02 (feat/kb-canonical-reader, PR #25)
 
 ### Added
 - **Canonical KB reader for agents** — `GET /api/kb/catalog` (machine-readable doc

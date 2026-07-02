@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 /**
+ * ⚠️ DEPRECATED (2026-07-02) — DO NOT RUN.
+ * This script embeds with OpenAI text-embedding-3-small (1536 dims), but the live
+ * knowledge_items.embedding column holds 384-dim vectors from the self-hosted embed
+ * service (embed.insightprofit.live), and search_kb_by_embedding expects 384 dims.
+ * Running this would write incomparable vectors and break semantic search.
+ * Use instead: POST https://kb.insightprofit.live/api/kb/backfill  (free, matches prod)
+ *
  * Generate vector embeddings for every knowledge_items row + store in pgvector.
  *
  * Prereqs (one-time):
