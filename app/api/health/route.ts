@@ -72,6 +72,11 @@ export async function GET() {
       ok,
       ts: new Date().toISOString(),
       hasGithubToken: !!process.env.GITHUB_TOKEN,
+      hasR2Config: !!(
+        process.env.R2_ACCOUNT_ID &&
+        process.env.R2_ACCESS_KEY_ID &&
+        process.env.R2_SECRET_ACCESS_KEY
+      ),
       downstreams: { supabase, kbApi },
     },
     { status: 200 },
