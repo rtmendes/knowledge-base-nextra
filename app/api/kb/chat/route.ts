@@ -1,5 +1,18 @@
 import { NextRequest } from 'next/server'
 import { supabaseAdmin } from '../../../../lib/supabase'
+import {
+  cosRegisterOnce,
+  cosMemoryRetrieve,
+  cosMemoryWrite,
+  cosEvent,
+  type CosMemoryItem,
+} from '../../../../lib/cos-client'
+
+// LLM gateway base — overridable so a `headroom proxy` (token-compression
+// layer) can sit in front of every Chief-of-Staff LLM call without a code
+// change (CHIEF_OF_STAFF_ENTERPRISE_ARCHITECTURE.md §4). Defaults to the
+// exact URL previously hardcoded below.
+const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface ChatMessage {
@@ -804,6 +817,7 @@ function buildSystemPrompt(
   terms: string[],
   matchedEntities: Array<{ canonical: string; description?: string }>,
   pageContext?: PageContext,
+  cosMemory: CosMemoryItem[] = [],
 ): string {
   const blocks: string[] = []
   const totalHits =
@@ -904,6 +918,20 @@ ${pageContext.itemId ? `KB Item ID: ${pageContext.itemId}` : ''}
 When asked to summarize, edit, or improve "this page", refer to the above context.
 ` : ''
 
+  // Central CoS memory (L2) — retrieved from the Chief of Staff's central
+  // store (insightprofit-command-v2 /v1/memory/retrieve). This is what makes
+  // this assistant a CLIENT of the one enterprise brain instead of a silo:
+  // insight written by ANY app surfaces here too. Absent/empty when the CoS
+  // is unreachable or not configured — never blocks the turn.
+  const cosMemoryBlock = cosMemory.length > 0
+    ? `
+## Central Chief-of-Staff Memory (enterprise L2 recall)
+Cross-app memory retrieved from the central CoS for this query. Treat as additional enterprise context — cite it as "central CoS memory" (no per-item links).
+
+${cosMemory.map(m => `- ${m.content.slice(0, 600)}${typeof m.metadata?.title === 'string' ? ` _(“${m.metadata.title}”)_` : ''}`).join('\n')}
+`
+    : ''
+
   return `You are **Chief of Staff** — the AI orchestrator for the InsightProfit enterprise platform.
 
 ## Your Role
@@ -917,7 +945,7 @@ ${ENTERPRISE_ECOSYSTEM}
 
 ## Enterprise Data Sources Available (this turn)
 The blocks below are the result of a federated keyword search across the live Supabase enterprise data. Treat them as the authoritative current state. Pair them with the Innate Enterprise Knowledge above when answering.
-${pageBlock}${contextBlock}
+${pageBlock}${cosMemoryBlock}${contextBlock}
 
 ## Response Format
 - Use clear markdown: headers, bullet points, bold for key terms.
@@ -1171,17 +1199,26 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Federated enterprise search (entity-expanded, phrase-first, coverage-scored)
-    const { context: ctx, phrases, terms, matchedEntities } =
-      await federatedSearch(lastUserMessage.content)
+    // One brain: announce this surface to the central CoS (memoized, no-op
+    // when COS_URL/COS_TOKEN are unset) — never blocks the turn.
+    void cosRegisterOnce()
 
-    const systemPrompt = buildSystemPrompt(ctx, phrases, terms, matchedEntities, pageContext)
+    // Federated enterprise search (entity-expanded, phrase-first, coverage-scored)
+    // + central CoS memory recall (L2), in parallel. The CoS leg is
+    // timeout-bounded and returns [] on any failure, so chat latency and
+    // behavior are unchanged when the CoS is unreachable or unconfigured.
+    const [{ context: ctx, phrases, terms, matchedEntities }, cosMemory] = await Promise.all([
+      federatedSearch(lastUserMessage.content),
+      cosMemoryRetrieve(lastUserMessage.content, 5),
+    ])
+
+    const systemPrompt = buildSystemPrompt(ctx, phrases, terms, matchedEntities, pageContext, cosMemory)
     const fullMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages.slice(-10),
     ]
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1378,7 +1415,7 @@ export async function POST(req: NextRequest) {
             )
 
             // Make second request to get the natural language confirmation
-            const secondResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            const secondResp = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -1417,6 +1454,26 @@ export async function POST(req: NextRequest) {
           controller.close()
           if (conversationId && assistantBuffer) {
             void logAssistantMessage(conversationId, assistantBuffer, sourcesPayload, matchedEntities)
+          }
+          if (assistantBuffer) {
+            // Central memory + self-learning loop (fire-and-forget, no-ops
+            // without COS_URL/COS_TOKEN). The per-app chat stays local
+            // (cos_conversations above); the DISTILLED exchange goes to the
+            // central CoS store so every other surface can recall it.
+            void cosMemoryWrite(
+              'kb-chat',
+              `Q: ${lastUserMessage.content.slice(0, 500)}\nA: ${assistantBuffer.slice(0, 1500)}`,
+              {
+                conversationId: conversationId ?? null,
+                matchedEntities: matchedEntities.map(e => e.canonical),
+                sources: sourcesPayload.length,
+              },
+            )
+            void cosEvent('run.completed', {
+              outcome: 'success',
+              kind: 'kb-chat-turn',
+              conversationId: conversationId ?? null,
+            })
           }
         }
       },
