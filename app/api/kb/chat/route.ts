@@ -1451,16 +1451,20 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           console.error('[kb-chat] Stream error:', err)
         } finally {
-          controller.close()
+          // Persistence must be awaited BEFORE the stream closes: on Vercel
+          // the function freezes as soon as the response ends, so promises
+          // left dangling after controller.close() are silently killed.
+          // Every call here is timeout-bounded (4s) and failure-swallowing.
+          const flush: Promise<unknown>[] = []
           if (conversationId && assistantBuffer) {
-            void logAssistantMessage(conversationId, assistantBuffer, sourcesPayload, matchedEntities)
+            flush.push(logAssistantMessage(conversationId, assistantBuffer, sourcesPayload, matchedEntities))
           }
           if (assistantBuffer) {
-            // Central memory + self-learning loop (fire-and-forget, no-ops
-            // without COS_URL/COS_TOKEN). The per-app chat stays local
+            // Central memory + self-learning loop (no-ops without
+            // COS_URL/COS_TOKEN). The per-app chat stays local
             // (cos_conversations above); the DISTILLED exchange goes to the
             // central CoS store so every other surface can recall it.
-            void cosMemoryWrite(
+            flush.push(cosMemoryWrite(
               'kb-chat',
               `Q: ${lastUserMessage.content.slice(0, 500)}\nA: ${assistantBuffer.slice(0, 1500)}`,
               {
@@ -1468,13 +1472,15 @@ export async function POST(req: NextRequest) {
                 matchedEntities: matchedEntities.map(e => e.canonical),
                 sources: sourcesPayload.length,
               },
-            )
-            void cosEvent('run.completed', {
+            ))
+            flush.push(cosEvent('run.completed', {
               outcome: 'success',
               kind: 'kb-chat-turn',
               conversationId: conversationId ?? null,
-            })
+            }))
           }
+          await Promise.allSettled(flush)
+          controller.close()
         }
       },
     })
