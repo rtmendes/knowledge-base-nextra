@@ -43,24 +43,56 @@ export async function POST(request: NextRequest) {
       ? contentPlain.split(/\s+/).filter((w: string) => w.length > 0).length
       : 0
 
-    const { data, error } = await supabaseAdmin
+    // ── Enrich on write: embedding + summary (non-fatal) ─────────────────────
+    let embedding: number[] | null = null
+    try {
+      const embRes = await fetch(
+        `${process.env.EMBED_SERVICE_URL || 'https://embed.insightprofit.live'}/embed`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts: [`${title.trim()}\n\n${contentPlain.slice(0, 2000)}`] }),
+        }
+      )
+      if (embRes.ok) {
+        const { embeddings } = await embRes.json()
+        embedding = Array.isArray(embeddings?.[0]) ? embeddings[0] : null
+      }
+    } catch { /* embed service unavailable — item still saves */ }
+
+    const insertPayload: Record<string, any> = {
+      title: title.trim(),
+      slug,
+      item_type: item_type || 'imported',
+      category_id,
+      content: content || '',
+      content_plain: contentPlain,
+      word_count: wordCount,
+      status: status || 'active',
+      tags: tags || [],
+      summary: contentPlain.slice(0, 200) || null,
+      metadata: {},
+      created_at: now,
+      updated_at: now,
+    }
+    if (embedding) insertPayload.embedding = JSON.stringify(embedding)
+
+    let { data, error } = await supabaseAdmin
       .from('knowledge_items')
-      .insert({
-        title: title.trim(),
-        slug,
-        item_type: item_type || 'imported',
-        category_id,
-        content: content || '',
-        content_plain: contentPlain,
-        word_count: wordCount,
-        status: status || 'active',
-        tags: tags || [],
-        metadata: {},
-        created_at: now,
-        updated_at: now,
-      })
+      .insert(insertPayload)
       .select('id, title, slug')
       .single()
+
+    // Retry without enrichment columns if schema predates them
+    if (error && /embedding|summary/.test(error.message || '')) {
+      delete insertPayload.embedding
+      delete insertPayload.summary
+      ;({ data, error } = await supabaseAdmin
+        .from('knowledge_items')
+        .insert(insertPayload)
+        .select('id, title, slug')
+        .single())
+    }
 
     if (error) {
       console.error('[api/kb/items/create] Supabase error:', error)
