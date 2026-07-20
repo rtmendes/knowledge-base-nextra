@@ -1,0 +1,150 @@
+---
+title: "Authority Engine — Consolidated SOP + PRD + Tech Spec (AEO Tracker + Agentic Briefs)"
+slug: "authority-engine-aeo-tracker-sop-prd-techspec"
+status: active
+---
+
+**Version:** 2.0 (supersedes the AEO section of `SOP-ONDREJ-001 | PRD-ONDREJ-001`, Phase 2)
+**Date:** 2026-07-20
+**Owner:** Claude Code (session), reviewed by Rashida Mendes
+**App:** `authority-engine` (repo `rtmendes/authority-engine`)
+**Production URL:** `https://authority.insightprofit.live`
+**Command Center:** Embedded (iframe, "Content" category) at `authority.insightprofit.live` — label fixed 2026-07-20 (was "AI Creator Engine", a pre-rename leftover; see `insightprofit-os-cockpit` PR #26, merged)
+**Data store:** `supabase.insightprofit.live` (self-hosted, same instance as `cos_brands`/`app_catalog`) — no separate database, no Convex dependency going forward
+
+---
+
+## 1. Executive Summary
+
+Authority Engine started as a static SEO×AEO×GEO training course (landing page, 7 modules, a **manual** 50-point content scorecard where a human types in scores by hand, a 90-day roadmap). Separately, `SOP-ONDREJ-001` Phase 2 spec'd a live AI-answer-engine share-of-voice tracker as its own app (`aeo.insightprofit.live`) with a Convex backend. That second app was **partially built and run twice** (2026-05-20, 2026-06-01) against Perplexity only for 5 brands, synced its output into this Supabase instance, then was abandoned — no frontend was ever wired to it, and `aeo.insightprofit.live` never got a working deployment (TLS handshake fails outright; confirmed 2026-07-20).
+
+This revision:
+1. **Merges the live tracker into Authority Engine** (`/tracker` route) instead of resurrecting a second app at a domain nobody ever finished claiming.
+2. **Recovers the abandoned 2026-05/06 audit data** rather than overwriting it — the existing `aeo_*` tables and their real history are preserved and extended, not re-seeded.
+3. **Links `aeo_brands` to the real enterprise brand registry** (`cos_brands`, the `brand-registry-mapper` SSOT) via a new `cos_brand_id` foreign key, so AEO tracking isn't a disconnected 5-brand list.
+4. **Adds the agentic output layer that never existed**: after every audit, an LLM synthesizes a structured content brief (gaps vs. competitors, recommended topics, recommended schema) per brand, stored in a new `aeo_content_briefs` table. The manual Scorecard is no longer the only signal — audits now *produce* something, not just measure.
+5. **Routes all 4 engine personas (Perplexity/ChatGPT/Gemini/Claude) through OpenRouter**, one API key, any slot swappable to a cheaper or stronger model (including newer Kimi releases) without new credentials.
+
+---
+
+## 2. Provenance — what was found, what was recovered, what's new
+
+This section exists because the prior state was easy to misread as "nothing was ever built." It wasn't — it was built, tested, and dropped mid-flight.
+
+| Artifact | State found (2026-07-20) | Disposition |
+|---|---|---|
+| `aeo_brands`, `aeo_prompts`, `aeo_audits`, `aeo_audit_queries`, `aeo_competitors`, `aeo_sov_snapshots`, `aeo_cost_log` tables | **Already existed** in `supabase.insightprofit.live`, with `convex_id` columns showing they were originally written by a Convex app, synced here as a UMDM mirror. | Preserved. Not recreated, not re-seeded. |
+| `aeo_v_brand_health`, `aeo_v_sov_trends` views | Already existed, ready-made for dashboard reads. | Now used directly by the Tracker frontend. |
+| Real audit data | 10 completed audits (2 per brand × 5 brands), 70 audit_queries, 25 competitors (5/brand), across 2026-05-20 and 2026-06-01. **Perplexity only** — ChatGPT/Gemini/Claude were never run once. `aeo_cost_log` and `aeo_prompts` were empty despite existing (cost logging and a reusable prompt bank were never wired up). | Prompt bank backfilled from the 7 distinct historical `prompt_text` values per brand (migration 0001). Cost logging now writes on every run. |
+| `aeo.insightprofit.live` domain | DNS CNAME → Vercel exists, but no Vercel project ever claimed it — TLS handshake fails, not even a 404. | Left as-is (not deleted per standing instruction). The tracker lives at `authority.insightprofit.live/tracker` instead; this domain can be aliased later or retired, both are your call. |
+| `aeo-platform` repo | Tech spec + cursor rules only — zero implementation code. | Superseded by this doc; repo left untouched. |
+| Agentic content-brief generation (`generateBrief` in the original tech spec) | Never built. `ai_content_briefs` table exists but is a generic per-document table unrelated to brand/audit data — not reusable for this. | Built new: `aeo_content_briefs` table + `generateBrief()` in `api/_lib/aeoAudit.ts`. |
+| Command Center embed | Already wired (`v2-iframe-fleet.ts`, Content category) — but labeled "AI Creator Engine", the app's pre-rename name. | Label corrected, PR #26 merged. |
+| Brand registry link | `aeo_brands` had no relationship to `cos_brands` — five brands existed only inside the AEO subsystem. | `cos_brand_id` FK added (migration 0001), backfilled for all 5 (InsightProfit, Funded First, Family Gift Studio, Faith Promises → `faithpromises` in cos_brands, Second Spring). |
+
+**Why this matters operationally:** if you ever see the Tracker showing "0 audits" for a brand that you remember running, check `aeo_audits` directly before assuming data loss — the 2026-05/06 rows are real and load automatically once the frontend queries them correctly.
+
+---
+
+## 3. Architecture (Tech Spec)
+
+### 3.1 Data model (`supabase.insightprofit.live`, all tables RLS: anon read-only, service-role writes only)
+
+```
+aeo_brands (uuid id, name, slug, domain, color, vertical, is_active,
+            last_sov_pct, last_audit_at, cos_brand_id → cos_brands.id)
+  ├─ aeo_prompts (brand_id, text, intent, is_active)
+  ├─ aeo_competitors (brand_id, name, domain)
+  ├─ aeo_audits (brand_id, status, sov_pct, total_queries, total_mentions,
+  │              engine_breakdown jsonb {engine: {total, mentions}}, cost_usd,
+  │              started_at, completed_at)
+  │    ├─ aeo_audit_queries (audit_id, brand_id, engine, prompt_text, prompt_intent,
+  │    │                     raw_response, client_mentioned, client_position,
+  │    │                     competitors_mentioned jsonb [{name, position}],
+  │    │                     response_time_ms)
+  │    └─ aeo_content_briefs (audit_id, brand_id, title, summary, gaps[],
+  │                           recommended_topics[], recommended_schema[], model)  ← NEW
+  ├─ aeo_sov_snapshots (brand_id, engine, sov_pct, total_queries, mentions, snapshot_date)
+  └─ aeo_cost_log (audit_id, brand_slug, queries_count, estimated_cost_usd, provider, model)
+
+aeo_v_brand_health   (view: per-brand rollup — total_audits, total_prompts, total_competitors, total_cost_usd)
+aeo_v_sov_trends     (view: time series for charts)
+```
+
+One `aeo_audits` row = one full run for one brand across however many engines were requested (not one row per engine — `engine_breakdown` holds the per-engine split). This matches the schema that already existed; it is **not** the one-row-per-engine design an earlier draft of this work briefly used before the real schema was discovered.
+
+### 3.2 Agentic workflow (the part that was missing)
+
+```
+Run Audit Now (or weekly cron)
+  → for each engine × each active prompt:
+      OpenRouter chat completion → extract brand/competitor mentions →
+      write aeo_audit_queries row
+  → aggregate → write aeo_audits (status=complete, sov_pct, engine_breakdown)
+  → write aeo_cost_log + aeo_sov_snapshots
+  → update aeo_brands.last_sov_pct / last_audit_at
+  → generateBrief(): LLM call over the raw audit results →
+      structured JSON {summary, gaps, recommended_topics, recommended_schema} →
+      write aeo_content_briefs
+```
+
+Every run produces an artifact a human can act on (a brief), not just a percentage. This is the "not an empty checklist" requirement — the Scorecard's manual 0–5-per-criterion rating still exists for pages a human wants to eyeball, but it's no longer the only output of the AEO system.
+
+### 3.3 Model routing (OpenRouter)
+
+| Engine slot | Default model | Swappable to |
+|---|---|---|
+| Perplexity | `perplexity/sonar-pro` | any OpenRouter model |
+| ChatGPT | `openai/gpt-4o` | incl. `openai/gpt-4o-mini` (cheap) |
+| Gemini | `google/gemini-2.0-flash-001` | — |
+| Claude | `anthropic/claude-sonnet-4` | incl. `anthropic/claude-3.5-haiku` (cheap) |
+| Brief generation | `anthropic/claude-sonnet-4` (fixed) | — |
+
+One API key (`OPENROUTER_API_KEY`) instead of four vendor keys. `moonshotai/kimi-k2` is listed as a preset (cheap, strong reasoning); the picker also accepts free text for any current model id, since exact slugs (e.g. a "Kimi 3" release) shift over time and shouldn't be hardcoded.
+
+### 3.4 Endpoints (`authority-engine` repo)
+
+- `api/aeo-audit.ts` — manual trigger, Node runtime (`maxDuration: 120`), `POST {brandId, engines?, models?}`.
+- `api/cron/aeo-weekly.ts` — all active brands, all 4 engines, Mondays 13:00 UTC (≈8am ET, doesn't shift for DST), `maxDuration: 300`, concurrency-limited (3 brands at a time), gated on `CRON_SECRET`.
+- `api/_lib/aeoAudit.ts` — shared runner + `generateBrief()`, used by both.
+
+### 3.5 Frontend
+
+`/tracker` route, linked in the main nav: brand cards (color-coded, linked to `cos_brands` scope/revenue-priority), live per-engine SoV bars from the latest audit's `engine_breakdown`, "Run Audit Now", expandable content-brief view (summary / gaps / recommended topics / recommended schema), full audit history table, per-engine OpenRouter model picker.
+
+---
+
+## 4. SOP — operating the Tracker
+
+### 4.1 One-time setup (required before first use)
+1. Apply `authority-engine/migrations/0001_aeo_cos_brands_link_and_briefs.sql` by hand in Supabase Studio against `supabase.insightprofit.live` (this instance has no SQL-exec RPC — same convention as every other migration in this org). This only *adds* columns/tables; it does not touch existing data.
+2. Confirm Vercel env vars are present on the `authority-engine` project (production + preview): `SHS_URL`, `SHS_ANON`, `SHS_SERVICE`, `VITE_SHS_URL`, `VITE_SHS_ANON`, `OPENROUTER_API_KEY`, `CRON_SECRET`. Already wired as of this revision.
+3. Merge `authority-engine` PR (AEO Tracker) once the migration above has run.
+
+### 4.2 Running an audit
+- Manual: open `authority.insightprofit.live/tracker`, pick models per engine slot if you want non-default ones, click "Run Audit Now" on a brand card. Takes up to ~2 minutes (4 engines × ~7 prompts, sequential per engine).
+- Scheduled: the Monday cron runs all active brands automatically — no action needed.
+
+### 4.3 Reading the output
+- **SoV bars** on each brand card = mentions/total-queries per engine from the most recent audit.
+- **"View brief"** = the agentic output: what the client is missing that competitors have, what to publish next, what schema to add.
+- **Audit history table** = every run, including the recovered 2026-05/06 ones, with cost.
+
+### 4.4 Adding a brand
+Insert a row into `aeo_brands` with `cos_brand_id` set to the matching `cos_brands.id`, plus `aeo_competitors` rows. There are 19 brands in `cos_brands` total; only 5 have AEO tracking today (the original SOP's scope) — extending coverage to more is a future decision, not automatic.
+
+### 4.5 Known limitations / next decisions (not blockers)
+- Cost estimate is a flat $0.005/query heuristic (matches the historical rate already in the data), not per-model OpenRouter pricing — fine for budgeting, not exact.
+- ChatGPT/Gemini/Claude engines have zero historical runs — first real-world test of those three happens on the next audit.
+- `aeo.insightprofit.live` domain is unclaimed and untouched; decide separately whether to alias it to this app or retire it.
+
+---
+
+## 5. Reference
+
+- **Live URL:** `https://authority.insightprofit.live` (course + `/tracker`)
+- **Command Center:** embedded under "Content", correctly labeled "Authority Engine" as of `insightprofit-os-cockpit` PR #26 (merged 2026-07-20)
+- **Repo:** `rtmendes/authority-engine`
+- **Data:** `supabase.insightprofit.live` (self-hosted), tables prefixed `aeo_`
+- **Brand registry link:** `aeo_brands.cos_brand_id → cos_brands.id`
+- **Original spec this supersedes:** `SOP-ONDREJ-001 | PRD-ONDREJ-001` (`ondrej-shimeles-stack-integration-sop.mdoc`), Phase 2 only — Phases 1 and 3 of that document are unaffected by this revision.
