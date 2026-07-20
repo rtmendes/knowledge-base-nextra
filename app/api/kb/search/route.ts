@@ -155,7 +155,64 @@ export async function POST(request: Request) {
 
     const categoryId: string | null = category_id || null
 
-    // ── Run semantic and keyword searches in parallel ─────────────────────────
+    // ── v2: single-round-trip ranked hybrid via kb_hybrid_search RPC ──────────
+    // Uses the weighted search_doc tsvector (ts_rank_cd) + pgvector cosine,
+    // fused with RRF, snippets via ts_headline. Falls through to the legacy
+    // merge below if the RPC isn't deployed yet or returns nothing (keeps
+    // ILIKE partial-word fallback for short/partial queries).
+    let v2Embedding: number[] | null = null
+    try {
+      const embRes = await fetch(`${EMBED_URL}/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts: [query] }),
+      })
+      if (embRes.ok) {
+        const { embeddings } = await embRes.json()
+        v2Embedding = Array.isArray(embeddings?.[0]) ? embeddings[0] : null
+      }
+    } catch { /* embedding unavailable — RPC runs keyword-only */ }
+
+    try {
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/kb_hybrid_search`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({
+          query_text: query,
+          query_embedding: v2Embedding ? JSON.stringify(v2Embedding) : null,
+          match_count: limit,
+          filter_category_id: categoryId,
+        }),
+      })
+      if (rpcRes.ok) {
+        const rows: any[] = await rpcRes.json()
+        if (Array.isArray(rows) && rows.length > 0) {
+          const searchTypeV2 = rows.some(r => r.match_type === 'hybrid')
+            ? 'hybrid'
+            : rows.some(r => r.match_type === 'semantic')
+              ? 'semantic'
+              : 'keyword'
+          return NextResponse.json({
+            results: rows.map(r => ({
+              id: r.id,
+              title: r.title,
+              slug: r.slug,
+              item_type: r.item_type,
+              category_id: r.category_id,
+              summary: r.summary,
+              word_count: r.word_count,
+              similarity: r.similarity,
+              preview: r.preview || r.summary || '',
+              match_type: r.match_type,
+            })),
+            search_type: searchTypeV2,
+            engine: 'kb_hybrid_search_v2',
+          })
+        }
+      }
+    } catch { /* RPC not deployed — legacy path below */ }
+
+    // ── Legacy path: run semantic and keyword searches in parallel ────────────
     const [embedRes, keywordItems] = await Promise.allSettled([
       fetch(`${EMBED_URL}/embed`, {
         method: 'POST',
