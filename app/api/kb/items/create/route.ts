@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     } catch { /* embed service unavailable — item still saves */ }
 
     const insertPayload: Record<string, any> = {
+      user_id: '893ac9b3-d3f8-4809-ab8e-0e2ad12bc0d0',
       title: title.trim(),
       slug,
       item_type: item_type || 'imported',
