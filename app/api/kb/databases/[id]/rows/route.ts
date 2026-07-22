@@ -40,6 +40,7 @@ export async function POST(
       const { data: newItem, error: itemError } = await supabaseAdmin
         .from('knowledge_items')
         .insert({
+          user_id: '893ac9b3-d3f8-4809-ab8e-0e2ad12bc0d0',
           title: titleValue,
           slug,
           item_type: 'database_page',

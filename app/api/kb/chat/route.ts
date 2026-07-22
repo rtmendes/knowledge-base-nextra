@@ -1131,6 +1131,7 @@ async function executeKbTool(
     const { data, error } = await supabaseAdmin
       .from('knowledge_items')
       .insert({
+        user_id: '893ac9b3-d3f8-4809-ab8e-0e2ad12bc0d0',
         title: String(args.title).trim(),
         slug,
         item_type: args.item_type || 'imported',
