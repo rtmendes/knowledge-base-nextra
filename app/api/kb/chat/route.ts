@@ -134,6 +134,24 @@ function safeKw(kw: string): string {
   return kw.replace(/[%,()]/g, ' ').trim()
 }
 
+const EMBED_URL = process.env.EMBED_SERVICE_URL || 'https://embed.insightprofit.live'
+
+/** Embed text via the internal embed service. Non-fatal — returns null on any failure. */
+async function embedText(text: string): Promise<number[] | null> {
+  try {
+    const res = await fetch(`${EMBED_URL}/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts: [text] }),
+    })
+    if (!res.ok) return null
+    const { embeddings } = await res.json()
+    return Array.isArray(embeddings?.[0]) ? embeddings[0] : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Look up entities in kb_entities whose canonical OR aliases match any token
  * in the query, returning canonical names + their full alias lists. The route
@@ -293,6 +311,7 @@ const APP_MIN_SCORE    = 25
 const GENERIC_MIN_SCORE = 25
 
 async function searchKBItems(
+  query: string,
   phrases: string[],
   terms: string[],
   groups: string[][],
@@ -300,6 +319,40 @@ async function searchKBItems(
 ): Promise<KBSearchResult[]> {
   if (!supabaseAdmin) return []
   if (phrases.length === 0 && terms.length === 0) return []
+
+  // Ranked path: kb_hybrid_search RPC (RRF fusion of weighted FTS ts_rank_cd +
+  // 384-dim vector cosine — the same ranked search that powers /api/kb/search).
+  // This is real relevance ranking instead of keyword-substring/coverage
+  // scoring, so it doesn't surface a document just because a phrase happens
+  // to appear somewhere in it. Falls through to the legacy FTS/ILIKE path
+  // below if the RPC is unavailable or returns nothing.
+  try {
+    const embedding = await embedText(query)
+    const { data: hybridRows, error: hybridError } = await supabaseAdmin.rpc('kb_hybrid_search', {
+      query_text: query,
+      query_embedding: embedding ? JSON.stringify(embedding) : null,
+      match_count: limit,
+      filter_category_id: null,
+    })
+    if (!hybridError && Array.isArray(hybridRows) && hybridRows.length > 0) {
+      const ids = hybridRows.map((r: any) => r.id)
+      const { data: fullRows } = await supabaseAdmin
+        .from('knowledge_items')
+        .select('id, content_plain, tags')
+        .in('id', ids)
+      const byId = new Map((fullRows || []).map((r: any) => [r.id, r]))
+      return hybridRows.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        item_type: r.item_type,
+        content_plain: (byId.get(r.id)?.content_plain || r.preview || r.summary || '').slice(0, 4000),
+        tags: byId.get(r.id)?.tags || [],
+        word_count: r.word_count,
+      }))
+    }
+  } catch {
+    // RPC not migrated yet — fall through to legacy path
+  }
 
   // Fast path: Postgres FTS via search_knowledge_items_fts RPC.
   // Falls back to ILIKE if the RPC doesn't exist yet (pre-migration).
@@ -709,7 +762,7 @@ async function federatedSearch(query: string): Promise<{
 
   // Step 2: federated search
   const [kbItems, apps, agents, tools, offers, tasks, credentials] = await Promise.all([
-    searchKBItems(enrichedPhrases, terms, enrichedGroups),
+    searchKBItems(query, enrichedPhrases, terms, enrichedGroups),
     searchAppCatalog(enrichedPhrases, terms, enrichedGroups),
     searchAiAgents(enrichedPhrases, terms, enrichedGroups),
     searchTechTools(enrichedPhrases, terms, enrichedGroups),
