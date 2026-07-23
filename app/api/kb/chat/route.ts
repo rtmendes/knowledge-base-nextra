@@ -1244,6 +1244,13 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    // TEMP DIAGNOSTIC — never logs the full secret, just enough to tell which
+    // env var resolved and whether its value looks sane. Remove once the
+    // OpenRouter 401 "User not found" issue is confirmed fixed.
+    console.log('[kb-chat] apiKey source:', process.env.OPENROUTER_KEY_KB ? 'OPENROUTER_KEY_KB' : 'OPENROUTER_API_KEY (fallback)',
+      '| KB_KEY set:', !!process.env.OPENROUTER_KEY_KB, 'len:', process.env.OPENROUTER_KEY_KB?.length,
+      '| API_KEY set:', !!process.env.OPENROUTER_API_KEY, 'len:', process.env.OPENROUTER_API_KEY?.length,
+      '| used prefix:', apiKey.slice(0, 12))
 
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
     if (!lastUserMessage) {
