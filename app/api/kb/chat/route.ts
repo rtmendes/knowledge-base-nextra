@@ -1237,7 +1237,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY
+    const apiKey = process.env.OPENROUTER_KEY_KB || process.env.OPENROUTER_API_KEY
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'AI service not configured' }), {
         status: 500,
