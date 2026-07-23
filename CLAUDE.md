@@ -114,6 +114,16 @@ const supabase = createClient(
   programmatically from this environment. Only hand over a step when genuinely
   impossible (auth-gated UI), and then as an exact copy-paste.
 
+### Vercel env vars: always Production + Preview (standing rule)
+
+Any secret an app needs at runtime — API keys, `OPENROUTER_KEY_*`, etc. — must
+be added to **both Production and Preview** in Vercel, never Production only.
+Chat/AI features and any other functionality gated on a secret must work
+identically on preview deploys as on the live site. This applies to every
+InsightProfit app/Vercel project in the command center, not just this repo —
+when handing off a "go add this secret" step (dashboard or a browser-control
+agent), always specify both environments explicitly.
+
 ## Project-Management Mode (standing rule)
 
 This repo tracks its work in `TASKS.md`. That file — not the chat history — is
